@@ -1,29 +1,52 @@
-// index.js
 const express = require('express');
-const bodyParser = require('body-parser');
-const { MessagingResponse } = require('twilio').twiml;
-
 const app = express();
-app.use(bodyParser.urlencoded({ extended: false }));
+const PORT = process.env.PORT || 3000;
 
-// 當 Twilio 傳訊息過來時執行這個
+// 模擬使用者對話狀態（開發版可用，未連接 Firestore）
+const userState = {};
+
+app.use(express.urlencoded({ extended: false }));
+
 app.post('/whatsapp', (req, res) => {
-  const msg = req.body.Body;
-  const from = req.body.From;
+  const from = req.body.From; // 使用者電話號碼
+  const body = req.body.Body.trim(); // 去除多餘空白
+  let replyMsg = '';
 
-  console.log(`✅ 收到訊息：「${msg}」來自 ${from}`);
+  if (!userState[from]) {
+    // 若是第一次對話或未在狀態中
+    userState[from] = 'WAITING_INPUT';
+    replyMsg = '請你輸入一至三';
+  } else {
+    // 使用者已經在輸入階段
+    switch (body) {
+      case '1':
+        replyMsg = 'A';
+        delete userState[from];
+        break;
+      case '2':
+        replyMsg = 'B';
+        delete userState[from];
+        break;
+      case '3':
+        replyMsg = 'C';
+        delete userState[from];
+        break;
+      default:
+        replyMsg = '我只接受輸入一至三';
+    }
+  }
 
-  const twiml = new MessagingResponse();
-  twiml.message('✅ 訊息已收到，謝謝！');
-
+  // 回傳 TwiML XML 格式的回覆
   res.set('Content-Type', 'text/xml');
-  res.send(twiml.toString());
+  res.send(`
+    <Response>
+      <Message>${replyMsg}</Message>
+    </Response>
+  `);
 });
 
-// 啟動伺服器
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ 機器人已啟動於 http://localhost:${PORT}`);
+  console.log(`✅ 問診系統機器人已啟動於 port ${PORT}`);
 });
 
 
