@@ -15,7 +15,7 @@ app.post('/whatsapp', (req, res) => {
   if (!userState[from]) {
     // 若是第一次對話或未在狀態中
     userState[from] = 'WAITING_INPUT';
-    replyMsg = '請你輸入一至三';
+    replyMsg = '請你輸入1至3';
   } else {
     // 使用者已經在輸入階段
     switch (body) {
@@ -32,7 +32,7 @@ app.post('/whatsapp', (req, res) => {
         delete userState[from];
         break;
       default:
-        replyMsg = '我只接受輸入一至三';
+        replyMsg = '我只接受輸入1至3';
     }
   }
 
@@ -48,6 +48,7 @@ app.post('/whatsapp', (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ 問診系統機器人已啟動於 port ${PORT}`);
 });
+
 
 
 
