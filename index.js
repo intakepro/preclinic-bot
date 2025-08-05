@@ -6,7 +6,7 @@ const userState = {};
 
 app.use(express.urlencoded({ extended: false }));
 
-app.post('https://predoctor.onrender.com/whatsapp', (req, res) => {
+app.post('/whatsapp', (req, res) => {
   const from = req.body.From;
   const body = req.body.Body.trim();
   let replyMsg = '';
@@ -34,6 +34,7 @@ app.post('https://predoctor.onrender.com/whatsapp', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
 
