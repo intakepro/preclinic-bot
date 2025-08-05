@@ -1,40 +1,30 @@
+// index.js
 const express = require('express');
+const bodyParser = require('body-parser');
+const { MessagingResponse } = require('twilio').twiml;
+
 const app = express();
-const PORT = 3000;
+app.use(bodyParser.urlencoded({ extended: false }));
 
-const userState = {};
-
-app.use(express.urlencoded({ extended: false }));
-
+// 當 Twilio 傳訊息過來時執行這個
 app.post('/whatsapp', (req, res) => {
+  const msg = req.body.Body;
   const from = req.body.From;
-  const body = req.body.Body.trim();
-  let replyMsg = '';
 
-  if (body === '1') {
-    replyMsg = '你選擇了選項 A';
-  } else if (body === '2') {
-    replyMsg = '你選擇了選項 B';
-  } else if (body === '3') {
-    replyMsg = '你選擇了選項 C';
-  } else {
-    replyMsg = '請輸入數字 1、2 或 3。';
-  }
+  console.log(`✅ 收到訊息：「${msg}」來自 ${from}`);
 
-  const twiml = `
-    <Response>
-      <Message>${replyMsg}</Message>
-    </Response>
-  `;
+  const twiml = new MessagingResponse();
+  twiml.message('✅ 訊息已收到，謝謝！');
 
-  res.type('text/xml');
-  res.send(twiml);
+  res.set('Content-Type', 'text/xml');
+  res.send(twiml.toString());
 });
 
+// 啟動伺服器
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ 機器人已啟動於 http://localhost:${PORT}`);
 });
-
 
 
 
