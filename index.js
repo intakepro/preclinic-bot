@@ -7,7 +7,7 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
 // 當 Twilio 傳訊息過來時執行這個
-app.post('/whatsapp', (req, res) => {
+app.post('/whatsa', (req, res) => {
   const msg = req.body.Body;
   const from = req.body.From;
 
@@ -25,6 +25,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ 機器人已啟動於 http://localhost:${PORT}`);
 });
+
 
 
 
