@@ -19,6 +19,13 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   admin.initializeApp();
 }
 
+
+db.collection('test').doc('ping').set({ t: new Date() })
+  .then(() => console.log('✅ Firestore 寫入成功'))
+  .catch(err => console.error('❌ Firestore 連線失敗', err));
+
+
+
 const db = admin.firestore();
 
 const app = express();
@@ -232,4 +239,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('Server running on port', PORT);
 });
+
 
