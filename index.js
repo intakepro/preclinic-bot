@@ -15,23 +15,67 @@ const db = admin.firestore();
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// 小工具：取或建 session（同號→最近未結束的；否則新建）
-async function getOrCreateSession(phone) {
-  const q = await db.collectionGroup('sessions')
-    .where('phone', '==', phone)
-    .where('closedAt', '==', null)
-    .orderBy('createdAt', 'desc').limit(1).get();
-  if (!q.empty) return { ref: q.docs[0].ref, data: q.docs[0].data() };
+/**
+ * 嘗試從錯誤訊息抽出 Firestore 建索引 URL（若有）
+ */
+function extractIndexUrl(err) {
+  const m = String(err && err.message || '').match(/https:\/\/console\.firebase\.google\.com\/[^\s)]+/);
+  return m ? m[0] : null;
+}
 
+/**
+ * 取或建 session（同號→最近未結束的；否則新建）
+ * 1) 首選：phone + closedAt==null + orderBy(createdAt desc) （需要複合索引）
+ * 2) 後備：phone + orderBy(createdAt desc) 取最近 5 筆，再在記憶體篩 closedAt==null
+ */
+async function getOrCreateSession(phone) {
+  try {
+    const q = await db.collectionGroup('sessions')
+      .where('phone', '==', phone)
+      .where('closedAt', '==', null)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (!q.empty) return { ref: q.docs[0].ref, data: q.docs[0].data() };
+  } catch (err) {
+    // 需要索引或其他預檢失敗 → 用後備方案
+    const url = extractIndexUrl(err);
+    console.warn('[Firestore] composite index likely required. Falling back query.', {
+      code: err.code, message: err.message, indexUrl: url
+    });
+  }
+
+  // 後備查詢：只用 phone + orderBy(createdAt desc)，在記憶體篩 closedAt==null
+  try {
+    const q2 = await db.collectionGroup('sessions')
+      .where('phone', '==', phone)
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
+
+    const open = q2.docs
+      .map(d => ({ ref: d.ref, data: d.data() }))
+      .find(x => !x.data.closedAt);
+
+    if (open) return open;
+  } catch (err2) {
+    console.error('[Firestore] fallback query failed', { code: err2.code, message: err2.message });
+  }
+
+  // 都搵唔到 → 新建
   const tenantId = 'default';
-  const ref = db.collection('tenants').doc(tenantId)
-    .collection('sessions').doc();
+  const ref = db.collection('tenants').doc(tenantId).collection('sessions').doc();
   const data = {
-    phone, patientId: null, channel: 'whatsapp',
-    state: 'WELCOME', complaints: [],
+    phone,
+    patientId: null,
+    channel: 'whatsapp',
+    state: 'WELCOME',
+    complaints: [],
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    closedAt: null, version: 1
+    closedAt: null,
+    version: 1
   };
   await ref.set(data);
   return { ref, data };
@@ -205,7 +249,7 @@ app.post('/whatsapp', async (req, res) => {
   if (state === 'SAFETY_FLAGS') {
     current = complaints[complaints.length - 1];
     current.safety_flags = [text];
-    // 生成簡要摘要（可替換成更複雜模板）
+
     const summary =
       `主訴：${(current.loc_display||[]).join('+')} ${((current.sensation_display||[])[0]||'不適')}\n` +
       `起病：${current.onset}；病程：${current.course}\n` +
@@ -213,6 +257,7 @@ app.post('/whatsapp', async (req, res) => {
       `伴隨：${(current.associated||[]).join('、')||'無'}\n` +
       `嚴重度：${current.severity_nrs ?? '未評'}；影響：${current.impact||'未述'}\n` +
       `危險徵象：${(current.safety_flags||[]).join('、')}`;
+
     current.summary_text = summary;
     complaints[complaints.length - 1] = current;
     await ref.update({ complaints });
@@ -249,6 +294,8 @@ app.post('/whatsapp', async (req, res) => {
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log('WhatsApp triage bot listening on ' + port));
+
+
 
 
 
