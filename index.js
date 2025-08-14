@@ -1,297 +1,234 @@
-// index.js
-// --- 基礎：Express + Twilio + Firestore（Render 環境友善寫法） ---
+
+// index.js — 單檔可部署版（Twilio WhatsApp + Firestore）
+// ----------------------------------------------------------
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
 const admin = require('firebase-admin');
 
-// Firestore 初始化（雲端：用 FIREBASE_SERVICE_ACCOUNT；本機：用 GOOGLE_APPLICATION_CREDENTIALS）
+// --- Firestore 初始化（Render 建議用環境變數 FIREBASE_SERVICE_ACCOUNT） ---
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   admin.initializeApp({ credential: admin.credential.cert(sa) });
 } else {
+  // 本機開發可用 GOOGLE_APPLICATION_CREDENTIALS
   admin.initializeApp();
 }
 const db = admin.firestore();
 
+// -------------------- 工具：回覆 --------------------
+function sendReply(res, twiml, text) {
+  twiml.message(text);
+  res.type('text/xml').send(twiml.toString());
+}
+
+// -------------------- 工具：Session --------------------
+async function getSession(phone) {
+  const ref = db.collection('sessions').doc(phone);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const fresh = {
+      phone,
+      module: 'patientName',
+      state: 'INIT', // INIT | MENU | ADD_NAME | ADD_GENDER | ADD_YEAR | ADD_ID | DELETE_MENU | VIEW_PROFILE
+      temp: {},
+      updatedAt: new Date()
+    };
+    await ref.set(fresh);
+    return fresh;
+  }
+  return snap.data();
+}
+async function saveSession(session) {
+  session.updatedAt = new Date();
+  await db.collection('sessions').doc(session.phone).set(session, { merge: true });
+}
+
+// -------------------- 工具：帳號/病人資料 --------------------
+async function ensureAccount(phone) {
+  const userRef = db.collection('users').doc(phone);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    await userRef.set({ phone, createdAt: new Date(), updatedAt: new Date() });
+    return { createdNow: true };
+  } else {
+    await userRef.set({ updatedAt: new Date() }, { merge: true });
+    return { createdNow: false };
+  }
+}
+
+async function listPatients(phone) {
+  const snap = await db.collection('users').doc(phone).collection('patients')
+    .orderBy('createdAt', 'asc')
+    .get();
+  const out = [];
+  snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+  return out.slice(0, 8);
+}
+
+async function addPatient(phone, data) {
+  const col = db.collection('users').doc(phone).collection('patients');
+  const now = new Date();
+  const payload = {
+    name: data.name,
+    gender: data.gender,       // '男' | '女'
+    birthYear: data.birthYear, // number
+    idNumber: data.idNumber,   // string
+    createdAt: now,
+    updatedAt: now
+  };
+  const docRef = await col.add(payload);
+  return { id: docRef.id, ...payload };
+}
+
+async function deletePatient(phone, patientId) {
+  await db.collection('users').doc(phone).collection('patients').doc(patientId).delete();
+}
+
+// -------------------- 驗證 --------------------
+function isValidGender(t) { return t === '男' || t === '女'; }
+function isValidYear(t) {
+  const y = Number(t);
+  const now = new Date().getFullYear();
+  return Number.isInteger(y) && y >= 1900 && y <= now;
+}
+function isValidId(t) { return typeof t === 'string' && t.trim().length >= 4; }
+
+// -------------------- 文字樣板 --------------------
+function renderMenu(patients, firstTime = false) {
+  const lines = [];
+  if (firstTime || patients.length === 0) {
+    lines.push('👋 歡迎使用。偵測到這是你首次使用或尚未建立資料。');
+    lines.push('請先新增一位病人（依序輸入：姓名→性別→出生年份→身份證號）。');
+    lines.push('');
+    lines.push('回覆「1」開始新增。');
+    return lines.join('\n');
+  }
+
+  lines.push('👤 請選擇或新增病人：');
+  patients.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`));
+  lines.push(`${patients.length + 1}. ➕ 新增病人`);
+  lines.push('');
+  lines.push('請回覆編號（例如：1）。');
+  return lines.join('\n');
+}
+
+function renderDeleteMenu(patients) {
+  const lines = [];
+  lines.push('📦 已達上限：此帳號最多可儲存 8 位病人。');
+  lines.push('請選擇要刪除的一位病人：');
+  patients.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`));
+  lines.push('');
+  lines.push('回覆編號刪除，或輸入 0 返回上一頁。');
+  return lines.join('\n');
+}
+
+function renderProfile(p) {
+  return [
+    '📄 病人個人資料',
+    `姓名：${p.name}`,
+    `性別：${p.gender}`,
+    `出生年份：${p.birthYear}`,
+    `身份證號碼：${p.idNumber}`
+  ].join('\n');
+}
+
+// -------------------- 主路由：任何訊息即進入本模組 --------------------
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// --- 導航用：流程定義 ---
-const FLOW = [
-  {
-    id: 'intro',
-    name: '系統歡迎頁',
-    questions: [
-      {
-        id: 'welcome',
-        prompt:
-          '👋 歡迎使用預先問診系統。\n輸入 1 開始；隨時輸入 0 回上一頁（此頁為最上層，0 將重新顯示本頁）。',
-      },
-    ],
-  },
-  {
-    id: 'm1',
-    name: '輸入病人名字模組',
-    questions: [
-      { id: 'pname', prompt: '1) 請輸入病人姓名（按 0 回上一頁）。' },
-      { id: 'pname_confirm', prompt: '2) 請確認姓名是否正確？(1=是, 2=否；0=上一頁)' },
-      { id: 'm1_placeholder', prompt: '📦 模組功能製作中…輸入任意鍵繼續（0=上一頁）。' },
-    ],
-  },
-  {
-    id: 'm2',
-    name: '問診權限檢查模組',
-    questions: [
-      { id: 'auth_check', prompt: '是否同意進行問診權限檢查？(1=同意, 2=不同意；0=上一頁)' },
-      { id: 'm2_placeholder', prompt: '📦 模組功能製作中…輸入任意鍵繼續（0=上一頁）。' },
-    ],
-  },
-  {
-    id: 'm3',
-    name: '讀取病人資料模組',
-    questions: [
-      { id: 'fetch_profile', prompt: '讀取既有基本資料？(1=讀取, 2=略過；0=上一頁)' },
-      { id: 'm3_placeholder', prompt: '📦 模組功能製作中…輸入任意鍵繼續（0=上一頁）。' },
-    ],
-  },
-  {
-    id: 'm4',
-    name: '讀取病史模組',
-    questions: [
-      { id: 'hx', prompt: '是否載入過往病史？(1=是, 2=否；0=上一頁)' },
-      { id: 'm4_placeholder', prompt: '📦 模組功能製作中…輸入任意鍵繼續（0=上一頁）。' },
-    ],
-  },
-  {
-    id: 'm5',
-    name: '問診系統模組',
-    questions: [
-      { id: 'chief', prompt: '主訴是什麼？請用一句話描述（0=上一頁）。' },
-      { id: 'onset', prompt: '開始時間/持續多久？（0=上一頁）' },
-      { id: 'aggravate', prompt: '何時加重/誘因？（0=上一頁）' },
-      { id: 'relieve', prompt: '什麼可緩解？（0=上一頁）' },
-      { id: 'assoc', prompt: '伴隨症狀？（0=上一頁）' },
-    ],
-  },
-  {
-    id: 'm6',
-    name: 'AI 整理模組',
-    questions: [{ id: 'ai_compile', prompt: '📦 整理摘要（占位）。輸入任意鍵繼續（0=上一頁）。' }],
-  },
-  {
-    id: 'm7',
-    name: '匯出總結模組',
-    questions: [{ id: 'export', prompt: '📦 匯出總結（占位）。輸入任意鍵完成（0=上一頁）。' }],
-  },
-];
-
-// ---------- 安全工具 ----------
-function clampState(state) {
-  // 夾模組
-  if (
-    typeof state.currentModule !== 'number' ||
-    state.currentModule < 0 ||
-    state.currentModule >= FLOW.length
-  ) {
-    state.currentModule = 0;
-  }
-  const mod = FLOW[state.currentModule];
-
-  // 夾題號
-  if (
-    typeof state.currentQuestion !== 'number' ||
-    state.currentQuestion < 0 ||
-    state.currentQuestion >= mod.questions.length
-  ) {
-    state.currentQuestion = 0;
-  }
-
-  // 歷史防呆
-  if (!Array.isArray(state.history)) state.history = [];
-  if (typeof state.answers !== 'object' || !state.answers) state.answers = {};
-  return state;
-}
-
-function posKey(mIdx, qIdx) {
-  // 邊界保護
-  if (mIdx < 0 || mIdx >= FLOW.length) return null;
-  const mod = FLOW[mIdx];
-  if (!mod || qIdx < 0 || qIdx >= mod.questions.length) return null;
-  return `${mod.id}.${mod.questions[qIdx].id}`;
-}
-
-function getPrompt(mIdx, qIdx) {
-  const key = posKey(mIdx, qIdx);
-  if (!key) {
-    // 越界就回到 0,0
-    return `【${FLOW[0].name} / 第 1 題】\n${FLOW[0].questions[0].prompt}\n\n（隨時輸入 0 回上一頁）`;
-  }
-  const mod = FLOW[mIdx];
-  const q = mod.questions[qIdx];
-  return `【${mod.name} / 第 ${qIdx + 1} 題】\n${q.prompt}\n\n（隨時輸入 0 回上一頁）`;
-}
-
-function isAtFirstQuestionOfModule(state) {
-  return state.currentQuestion === 0;
-}
-
-function moveToNext(state) {
-  clampState(state);
-  const mod = FLOW[state.currentModule];
-  if (state.currentQuestion < mod.questions.length - 1) {
-    state.currentQuestion += 1;
-    return state;
-  }
-  if (state.currentModule < FLOW.length - 1) {
-    state.currentModule += 1;
-    state.currentQuestion = 0;
-    return state;
-  }
-  state.done = true;
-  return state;
-}
-
-function moveToPrev(state) {
-  clampState(state);
-  if (!isAtFirstQuestionOfModule(state)) {
-    state.currentQuestion -= 1;
-    return state;
-  }
-  if (state.currentModule > 0) {
-    state.currentModule -= 1;
-    state.currentQuestion = FLOW[state.currentModule].questions.length - 1;
-    return state;
-  }
-  return state; // 已到最頂
-}
-
-function recordAnswer(state, input) {
-  clampState(state);
-  const k = posKey(state.currentModule, state.currentQuestion);
-  if (!k) return; // 越界就忽略一次
-  state.answers[k] = input;
-}
-
-// --- 工具：取或建 session 狀態（每個來電號碼一份） ---
-async function getOrCreateSession(phone) {
-  const ref = db.collection('sessions').doc(phone);
-  const snap = await ref.get();
-  if (snap.exists) {
-    const s = snap.data() || {};
-    return { ref, data: clampState(s) };
-  }
-
-  const initState = clampState({
-    currentModule: 0,
-    currentQuestion: 0,
-    history: [], // [{ m, q }]
-    answers: {},
-    done: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await ref.set(initState);
-  return { ref, data: initState };
-}
-
-function reply(msg) {
-  const twiml = new MessagingResponse();
-  twiml.message(msg);
-  return twiml.toString();
-}
-
-// --- 主處理：Twilio Webhook ---
 app.post('/whatsapp', async (req, res) => {
-  const fromRaw = req.body.From || '';
-  const phone = fromRaw.replace('whatsapp:', '');
-  const userInput = (req.body.Body || '').trim();
-
   const twiml = new MessagingResponse();
+  const from = (req.body.From || '').replace('whatsapp:', ''); // e.g. +852XXXXXXXX
+  const body = (req.body.Body || '').trim();
 
-  try {
-    const { ref, data: state } = await getOrCreateSession(phone);
-    clampState(state);
+  // 1) 建立/更新帳號；抓 session
+  await ensureAccount(from);
+  let session = await getSession(from);
+  session.module = 'patientName'; // 單模組檔
 
-    // restart
-    if (/^restart$/i.test(userInput)) {
-      const reset = {
-        currentModule: 0,
-        currentQuestion: 0,
-        history: [],
-        answers: {},
-        done: false,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      };
-      await ref.set(reset, { merge: true });
-      twiml.message(getPrompt(0, 0));
-      return res.type('text/xml').send(twiml.toString());
-    }
+  // 2) 抓目前名單
+  let patients = await listPatients(from);
 
-    // 已完成
-    if (state.done) {
-      twiml.message('✅ 問診已完成。輸入 "restart" 重新開始。');
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    // 回上一頁
-    if (userInput === '0') {
-      if (Array.isArray(state.history) && state.history.length > 0) {
-        const prev = state.history.pop();
-        if (prev && Number.isInteger(prev.m) && Number.isInteger(prev.q)) {
-          state.currentModule = prev.m;
-          state.currentQuestion = prev.q;
-        } else {
-          moveToPrev(state);
-        }
-      } else {
-        moveToPrev(state);
-      }
-
-      clampState(state);
-      await ref.set(
-        { ...state, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-      twiml.message(getPrompt(state.currentModule, state.currentQuestion));
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    // 正常作答
-    state.history = Array.isArray(state.history) ? state.history : [];
-    state.history.push({ m: state.currentModule, q: state.currentQuestion });
-
-    recordAnswer(state, userInput);
-    moveToNext(state);
-    clampState(state);
-
-    await ref.set(
-      {
-        currentModule: state.currentModule,
-        currentQuestion: state.currentQuestion,
-        history: state.history.slice(-50), // 限制長度
-        answers: state.answers,
-        done: !!state.done,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    if (state.done) {
-      twiml.message('🏁 全流程完成！\n你的資料已傳送給系統。\n輸入 "restart" 可重新開始。');
+  // 3) 首次使用或沒有名單 → 直接導向新增流程
+  if (session.state === 'INIT') {
+    if (patients.length === 0) {
+      session.state = 'ADD_NAME';
+      session.temp = {};
+      await saveSession(session);
+      return sendReply(res, twiml, '首次使用：請新增病人。\n\n1️⃣ 請輸入姓名（請依「身份證姓名」輸入）：');
     } else {
-      twiml.message(getPrompt(state.currentModule, state.currentQuestion));
+      session.state = 'MENU';
+      await saveSession(session);
+      return sendReply(res, twiml, renderMenu(patients));
     }
-    return res.type('text/xml').send(twiml.toString());
-  } catch (err) {
-    console.error('Error:', err);
-    twiml.message('⚠️ 系統發生錯誤，請稍後再試。');
-    return res.type('text/xml').send(twiml.toString());
   }
-});
 
-// 健康檢查
-app.get('/', (_, res) => res.send('OK'));
+  // 4) 狀態機
+  switch (session.state) {
+    case 'MENU': {
+      const n = Number(body);
+      // 若沒有病人且使用者回其它字 → 引導新增
+      if (patients.length === 0) {
+        session.state = 'ADD_NAME';
+        session.temp = {};
+        await saveSession(session);
+        return sendReply(res, twiml, '首次使用：請新增病人。\n\n1️⃣ 請輸入姓名（請依「身份證姓名」輸入）：');
+      }
+      if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
+        if (n <= patients.length) {
+          const chosen = patients[n - 1];
+          session.state = 'VIEW_PROFILE';
+          session.temp = { viewId: chosen.id };
+          await saveSession(session);
+          return sendReply(res, twiml, `${renderProfile(chosen)}\n\n（已回到主選單）\n\n${renderMenu(patients)}`);
+        }
+        // 新增
+        if (n === patients.length + 1) {
+          if (patients.length >= 8) {
+            session.state = 'DELETE_MENU';
+            await saveSession(session);
+            return sendReply(res, twiml, renderDeleteMenu(patients));
+          }
+          session.state = 'ADD_NAME';
+          session.temp = {};
+          await saveSession(session);
+          return sendReply(res, twiml, '1️⃣ 請輸入姓名（請依「身份證姓名」輸入）：');
+        }
+      }
+      // 不是有效數字 → 再顯示選單
+      await saveSession(session);
+      return sendReply(res, twiml, renderMenu(patients));
+    }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Server running on port', PORT));
+    case 'ADD_NAME': {
+      if (!body) return sendReply(res, twiml, '請輸入有效的姓名（身份證姓名）：');
+      session.temp.name = body;
+      session.state = 'ADD_GENDER';
+      await saveSession(session);
+      return sendReply(res, twiml, '2️⃣ 請輸入性別（回覆「男」或「女」）：');
+    }
+
+    case 'ADD_GENDER': {
+      if (!isValidGender(body)) return sendReply(res, twiml, '格式不正確。請回覆「男」或「女」。');
+      session.temp.gender = body;
+      session.state = 'ADD_YEAR';
+      await saveSession(session);
+      return sendReply(res, twiml, '3️⃣ 請輸入出生年份（例如：1978）：');
+    }
+
+    case 'ADD_YEAR': {
+      if (!isValidYear(body)) {
+        const now = new Date().getFullYear();
+        return sendReply(res, twiml, `年份不正確。請輸入 1900–${now} 的四位數年份：`);
+      }
+      session.temp.birthYear = Number(body);
+      session.state = 'ADD_ID';
+      await saveSession(session);
+      return sendReply(res, twiml, '4️⃣ 請輸入身份證號碼：');
+    }
+
+    case 'ADD_ID': {
+      if (!isValidId(body)) return sendRe
+
