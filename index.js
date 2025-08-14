@@ -1,11 +1,5 @@
-// index.js — 單檔可部署（Twilio WhatsApp + Firestore）
-// 需求：
-//  - 病人按連結傳任何字 → 以電話號碼當帳號
-//  - 若帳號無資料 → 引導首次建檔（姓名→性別→出生日期→身份證）→ 儲存 → 回到主選單
-//  - 若已有資料 → 列出所有姓名供選擇；亦可新增其他病人
-//  - 選定姓名後 → 顯示其個人資料
-//  - 加入「電話為空」防呆，避免 Firestore .doc('') 錯誤
-//  - 內建健康檢查路由與錯誤日誌
+// index.js — Twilio WhatsApp + Firestore（單檔可部署）
+// 修正：避免 Firestore .doc('')；強制覆蓋 session.phone；加防呆與詳盡日誌
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -19,23 +13,22 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     admin.initializeApp({ credential: admin.credential.cert(sa) });
     console.log('[BOOT] Firebase via FIREBASE_SERVICE_ACCOUNT');
   } catch (e) {
-    console.error('[BOOT] FIREBASE_SERVICE_ACCOUNT JSON 解析失敗：', e.message);
-    // 仍嘗試以預設憑證啟動，避免整個服務掛掉
+    console.error('[BOOT] FIREBASE_SERVICE_ACCOUNT JSON parse failed:', e.message);
     admin.initializeApp();
   }
 } else {
   admin.initializeApp();
-  console.log('[BOOT] Firebase via default credentials (GOOGLE_APPLICATION_CREDENTIALS)');
+  console.log('[BOOT] Firebase via default credentials');
 }
 const db = admin.firestore();
 
-// ------------- 共用：回覆 -------------
+// ------------- 回覆工具 -------------
 function sendReply(res, twiml, text) {
   twiml.message(text);
   res.type('text/xml').send(twiml.toString());
 }
 
-// ------------- Session 工具 -------------
+// ------------- Session 工具（已修正） -------------
 async function getSession(phone) {
   const ref = db.collection('sessions').doc(phone);
   const snap = await ref.get();
@@ -43,21 +36,28 @@ async function getSession(phone) {
     const fresh = {
       phone,
       module: 'patientName',
-      state: 'INIT', // INIT | MENU | ADD_NAME | ADD_GENDER | ADD_DOB | ADD_ID | VIEW_PROFILE
+      state: 'INIT', // INIT | MENU | ADD_NAME | ADD_GENDER | ADD_DOB | ADD_ID
       temp: {},
       updatedAt: new Date()
     };
     await ref.set(fresh);
     return fresh;
   }
-  return snap.data();
+  const data = snap.data() || {};
+  // ★ 無論舊資料如何，都強制覆蓋為本次 phone，避免空字串污染
+  data.phone = phone;
+  return data;
 }
+
 async function saveSession(session) {
+  if (!session || typeof session.phone !== 'string' || !session.phone.trim()) {
+    throw new Error(`saveSession: invalid session.phone (${session && session.phone})`);
+  }
   session.updatedAt = new Date();
   await db.collection('sessions').doc(session.phone).set(session, { merge: true });
 }
 
-// ------------- 帳號/病人資料 -------------
+// ------------- 資料存取 -------------
 async function ensureAccount(phone) {
   const userRef = db.collection('users').doc(phone);
   const userSnap = await userRef.get();
@@ -69,6 +69,7 @@ async function ensureAccount(phone) {
     return { createdNow: false };
   }
 }
+
 async function listPatients(phone) {
   const snap = await db.collection('users').doc(phone).collection('patients')
     .orderBy('createdAt', 'asc')
@@ -77,6 +78,7 @@ async function listPatients(phone) {
   snap.forEach(d => out.push({ id: d.id, ...d.data() }));
   return out;
 }
+
 async function addPatient(phone, data) {
   const col = db.collection('users').doc(phone).collection('patients');
   const now = new Date();
@@ -132,17 +134,17 @@ function renderProfile(p) {
   ].join('\n');
 }
 
-// ------------- App 與路由 -------------
+// ------------- App & 路由 -------------
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// 健康檢查（方便 Render / 瀏覽器檢測）
+// 健康檢查
 app.get('/', (req, res) => res.status(200).send('OK'));
 
 app.post('/whatsapp', async (req, res) => {
   const twiml = new MessagingResponse();
 
-  // 1) 取電話：加強防呆，避免為空
+  // 取電話（多欄位容錯）與訊息
   const rawFrom = (req.body.From ?? req.body.FromNumber ?? '').toString();
   const phone = rawFrom.replace(/^whatsapp:/i, '').trim();
   const body = (req.body.Body || '').toString().trim();
@@ -154,22 +156,21 @@ app.post('/whatsapp', async (req, res) => {
   });
 
   if (!phone) {
-    console.error('❌ 無法取得電話號碼 From，拒絕進一步存取 Firestore .doc()');
+    console.error('❌ missing phone (From). Block Firestore writes.');
     return sendReply(
       res, twiml,
-      '系統未能識別你的電話號碼，請從 WhatsApp 啟動連結重新進入，或直接回覆此對話一次。'
+      '系統未能識別你的電話號碼，請透過 WhatsApp 啟動連結重新進入。'
     );
   }
 
   try {
-    // 2) 確保帳號；抓 session 與名單
     await ensureAccount(phone);
     let session = await getSession(phone);
     session.module = 'patientName';
 
     let patients = await listPatients(phone);
 
-    // 3) 首次進入
+    // 首次
     if (session.state === 'INIT') {
       if (patients.length === 0) {
         session.state = 'ADD_NAME';
@@ -183,7 +184,7 @@ app.post('/whatsapp', async (req, res) => {
       }
     }
 
-    // 4) 狀態機
+    // 狀態機
     switch (session.state) {
       case 'MENU': {
         const n = Number(body);
@@ -225,7 +226,7 @@ app.post('/whatsapp', async (req, res) => {
         session.temp.gender = body;
         session.state = 'ADD_DOB';
         await saveSession(session);
-        return sendReply(res, twiml, '3️⃣ 請輸入出生日期（格式：YYYY-MM-DD，例如：1978-01-21）：');
+        return sendReply(res, twiml, '3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）：');
       }
 
       case 'ADD_DOB': {
@@ -269,12 +270,11 @@ app.post('/whatsapp', async (req, res) => {
     }
   } catch (err) {
     console.error('❌ Handler error:', err && err.stack ? err.stack : err);
-    // 優雅回覆使用者，避免 Twilio 逾時
     return sendReply(res, twiml, '系統暫時忙碌，請稍後再試。若持續出現問題，請把這段訊息截圖給診所。');
   }
 });
 
-// Render/Twilio 入口
+// 啟動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`[BOOT] WhatsApp bot running on ${PORT}`));
 
