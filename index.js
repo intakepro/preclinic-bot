@@ -1,299 +1,149 @@
 // index.js
+// 簡易 WhatsApp 問診流程控制器（6 個順序步驟，先用佔位模組，按 0 進入下一步）
+//
+// 依賴：express、body-parser、twilio
+// 安裝：npm i express body-parser twilio
+//
+// 啟動：node index.js
+// Webhook 路徑：POST /whatsapp
+//
+// 備註：目前使用「記憶體 Session」保存每個電話的流程步驟（適合本機測試）。
+//       未來要上線可改成 Firestore 或你既有的儲存方案。
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
-const admin = require('firebase-admin');
-
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  admin.initializeApp({ credential: admin.credential.cert(sa) });
-} else {
-  admin.initializeApp(); // 本機用 GOOGLE_APPLICATION_CREDENTIALS
-}
-const db = admin.firestore();
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-/**
- * 嘗試從錯誤訊息抽出 Firestore 建索引 URL（若有）
- */
-function extractIndexUrl(err) {
-  const m = String(err && err.message || '').match(/https:\/\/console\.firebase\.google\.com\/[^\s)]+/);
-  return m ? m[0] : null;
-}
+// ====== 流程步驟定義 ======
+const STEPS = [
+  { id: 1, key: 'auth',      name: '病人問診權限檢查模組' },
+  { id: 2, key: 'profile',   name: '讀取病人資料模組'     },
+  { id: 3, key: 'history',   name: '讀取病人病史模組'     },
+  { id: 4, key: 'interview', name: '問診系統模組'         },
+  { id: 5, key: 'ai_summar', name: 'AI整理模組'           },
+  { id: 6, key: 'export',    name: '匯出總結模組'         },
+];
 
-/**
- * 取或建 session（同號→最近未結束的；否則新建）
- * 1) 首選：phone + closedAt==null + orderBy(createdAt desc) （需要複合索引）
- * 2) 後備：phone + orderBy(createdAt desc) 取最近 5 筆，再在記憶體篩 closedAt==null
- */
-async function getOrCreateSession(phone) {
-  try {
-    const q = await db.collectionGroup('sessions')
-      .where('phone', '==', phone)
-      .where('closedAt', '==', null)
-      .orderBy('createdAt', 'desc')
-      .limit(1)
-      .get();
+// 記憶體 Session：{ [fromPhone]: { stepIndex: 0..5 } }
+const sessions = new Map();
 
-    if (!q.empty) return { ref: q.docs[0].ref, data: q.docs[0].data() };
-  } catch (err) {
-    // 需要索引或其他預檢失敗 → 用後備方案
-    const url = extractIndexUrl(err);
-    console.warn('[Firestore] composite index likely required. Falling back query.', {
-      code: err.code, message: err.message, indexUrl: url
-    });
+// 取得或建立 Session
+function getSession(from) {
+  if (!sessions.has(from)) {
+    sessions.set(from, { stepIndex: 0 }); // 從第 1 步（index 0）開始
   }
+  return sessions.get(from);
+}
 
-  // 後備查詢：只用 phone + orderBy(createdAt desc)，在記憶體篩 closedAt==null
-  try {
-    const q2 = await db.collectionGroup('sessions')
-      .where('phone', '==', phone)
-      .orderBy('createdAt', 'desc')
-      .limit(5)
-      .get();
+// 產生佔位提示訊息
+function placeholderMessage(step) {
+  return [
+    `🔧 【${step.id}. ${step.name}】`,
+    `該模組製作中，請輸入「0」跳去下一個流程。`,
+    `（未來你完成此模組後，把這裡替換為實際的函式呼叫即可）`
+  ].join('\n');
+}
 
-    const open = q2.docs
-      .map(d => ({ ref: d.ref, data: d.data() }))
-      .find(x => !x.data.closedAt);
-
-    if (open) return open;
-  } catch (err2) {
-    console.error('[Firestore] fallback query failed', { code: err2.code, message: err2.message });
+// 進入下一步：若已是最後一步，提示完成並重置或等待指令
+function goNext(session) {
+  if (session.stepIndex < STEPS.length - 1) {
+    session.stepIndex += 1;
+    return null; // 正常前進
+  } else {
+    // 已完成全部步驟
+    session.stepIndex = STEPS.length - 1; // 保持在最後一步
+    return '✅ 全部 6 個流程已完成。\n輸入「restart」可由第 1 步重新開始。';
   }
-
-  // 都搵唔到 → 新建
-  const tenantId = 'default';
-  const ref = db.collection('tenants').doc(tenantId).collection('sessions').doc();
-  const data = {
-    phone,
-    patientId: null,
-    channel: 'whatsapp',
-    state: 'WELCOME',
-    complaints: [],
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    closedAt: null,
-    version: 1
-  };
-  await ref.set(data);
-  return { ref, data };
 }
 
-function reply(msg) {
-  const twiml = new MessagingResponse();
-  twiml.message(msg);
-  return twiml.toString();
+// 回到第一步
+function restart(session) {
+  session.stepIndex = 0;
 }
 
+// 首次歡迎文案
+function welcomeText() {
+  return [
+    '👋 歡迎使用預先問診流程（Demo 版本）',
+    '此版本會依序呼叫 6 個模組（目前為佔位畫面）。',
+    '在每個步驟輸入「0」即可跳至下一個流程。',
+    '輸入「restart」可隨時回到第 1 步；輸入「help」查看指令。',
+  ].join('\n');
+}
+
+// 說明文案
+function helpText() {
+  const lines = STEPS.map(s => `  ${s.id}. ${s.name}`);
+  return [
+    '📖 指令說明：',
+    '  0        ➝ 跳到下一個流程',
+    '  restart  ➝ 回到第 1 步',
+    '  help     ➝ 顯示此說明',
+    '',
+    '📌 流程步驟：',
+    ...lines
+  ].join('\n');
+}
+
+// WhatsApp Webhook
 app.post('/whatsapp', async (req, res) => {
-  const phone = (req.body.From || '').replace('whatsapp:', '');
-  const text = (req.body.Body || '').trim();
-  const { ref, data } = await getOrCreateSession(phone);
-  let state = data.state;
-  let complaints = data.complaints || [];
-  let current = complaints[complaints.length - 1];
+  const twiml = new MessagingResponse();
 
-  // 全域指令
-  if (/^重來$/i.test(text)) {
-    await ref.update({ state: 'WELCOME', complaints: [] });
-    return res.send(reply('✅ 已重設。👋 你好！我是預先問診助理……（輸入「開始」繼續）'));
-  }
-  if (/^結束$/i.test(text)) {
-    await ref.update({ closedAt: admin.firestore.FieldValue.serverTimestamp(), state: 'DONE' });
-    return res.send(reply('🧾 已結束。祝早日康復！'));
-  }
-  if (/^返回$/i.test(text)) {
-    // 簡化處理：退回上一步（實務可用 state stack）
-    const backMap = {
-      IDENTIFY_PATIENT: 'WELCOME',
-      MAIN_COMPLAINT_LOC: 'IDENTIFY_PATIENT',
-      SENSATION: 'MAIN_COMPLAINT_LOC',
-      ONSET: 'SENSATION',
-      COURSE: 'ONSET',
-      AGGRAVATING: 'COURSE',
-      RELIEVING: 'AGGRAVATING',
-      ASSOCIATED: 'RELIEVING',
-      SEVERITY: 'ASSOCIATED',
-      IMPACT: 'SEVERITY',
-      SAFETY_FLAGS: 'IMPACT',
-      REVIEW: 'SAFETY_FLAGS',
-      SUMMARY: 'REVIEW'
-    };
-    state = backMap[state] || 'WELCOME';
-    await ref.update({ state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  const from = req.body.From || 'unknown';
+  const msg  = (req.body.Body || '').trim();
+
+  const session = getSession(from);
+
+  // 指令處理
+  if (/^restart$/i.test(msg)) {
+    restart(session);
+    twiml.message(welcomeText() + '\n\n' + placeholderMessage(STEPS[session.stepIndex]));
+    return res.type('text/xml').send(twiml.toString());
   }
 
-  // 對話流程
-  async function setState(s) {
-    state = s;
-    await ref.update({ state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  if (/^help$/i.test(msg)) {
+    twiml.message(helpText());
+    return res.type('text/xml').send(twiml.toString());
   }
 
-  if (state === 'WELCOME') {
-    if (!/^(開始|start)/i.test(text)) {
-      await setState('WELCOME');
-      return res.send(reply(
-        '👋 你好！我是預先問診助理。過程約 2 分鐘。\n輸入「開始」繼續。\n（任何時候可輸入：返回／重來／結束）'
-      ));
+  // 流程控制
+  const currentStep = STEPS[session.stepIndex];
+
+  if (msg === '0') {
+    const doneMessage = goNext(session);
+    if (doneMessage) {
+      // 全部完成
+      twiml.message(doneMessage);
+      return res.type('text/xml').send(twiml.toString());
     }
-    await setState('IDENTIFY_PATIENT');
-    return res.send(reply('請輸入你的稱呼（例：陳先生、媽媽、我自己）：'));
+    // 邁入下一步
+    const nextStep = STEPS[session.stepIndex];
+    twiml.message(placeholderMessage(nextStep));
+    return res.type('text/xml').send(twiml.toString());
   }
 
-  if (state === 'IDENTIFY_PATIENT') {
-    const displayName = text.slice(0, 40);
-    const tenantId = 'default';
-    const patientsRef = db.collection('tenants').doc(tenantId).collection('patients');
-    // 以 phone + displayName 去查，找不到就建一個
-    const snap = await patientsRef.where('phone', '==', phone).where('displayName', '==', displayName).limit(1).get();
-    let patientRef, patientId;
-    if (snap.empty) {
-      patientRef = patientsRef.doc();
-      await patientRef.set({ phone, displayName, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-      patientId = patientRef.id;
-    } else {
-      patientRef = snap.docs[0].ref;
-      patientId = patientRef.id;
-    }
-    await ref.update({ patientId });
-    complaints.push({ id: 'cmp_' + Date.now(), loc_display: [] });
-    await ref.update({ complaints });
-    await setState('MAIN_COMPLAINT_LOC');
-    return res.send(reply('❓主要哪裡不舒服？（可多選，分行輸入）\n🧠頭頸｜🫁胸｜🍔腹/下背｜💪上肢｜🦵下肢｜🩺全身｜❓其他（描述）'));
-  }
+  // 非 0 的一般輸入：回覆目前步驟的佔位提示
+  // （未來可在這裡加入對應模組的實際處理）
+  twiml.message(
+    // 第一次互動也給個歡迎說明
+    (msg === '' ? welcomeText() + '\n\n' : '') + placeholderMessage(currentStep)
+  );
 
-  if (state === 'MAIN_COMPLAINT_LOC') {
-    current = complaints[complaints.length - 1];
-    current.loc_display = text.split(/[，,\/\n\s]+/).filter(Boolean).slice(0, 5);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('SENSATION');
-    return res.send(reply('💢不舒服的感覺是？（可多選）\n痛(刺/灼/壓)｜麻｜癢｜脹悶｜刺痛｜乏力｜呼吸困難｜心悸｜噁心｜其他（描述）'));
-  }
-
-  if (state === 'SENSATION') {
-    current = complaints[complaints.length - 1];
-    current.sensation_display = text.split(/[，,\/\n\s]+/).filter(Boolean).slice(0, 8);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('ONSET');
-    return res.send(reply('⏰ 什麼時候開始？\n今天／昨天／幾天前／幾星期前／幾個月前／記不起'));
-  }
-
-  if (state === 'ONSET') {
-    current = complaints[complaints.length - 1];
-    current.onset = text.slice(0, 20);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('COURSE');
-    return res.send(reply('📅 是持續還是間歇？\n持續｜間歇（一天多次／偶爾）'));
-  }
-
-  if (state === 'COURSE') {
-    current = complaints[complaints.length - 1];
-    current.course = /間歇/.test(text) ? '間歇' : '持續';
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('AGGRAVATING');
-    return res.send(reply('🔥 什麼會令它更嚴重？\n活動/運動｜吃東西/喝水｜呼吸/咳嗽｜姿勢｜情緒/壓力｜無明顯關係｜其他'));
-  }
-
-  if (state === 'AGGRAVATING') {
-    current = complaints[complaints.length - 1];
-    current.aggravating = text.split(/[，,\/\n\s]+/).filter(Boolean).slice(0, 6);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('RELIEVING');
-    return res.send(reply('🌿 什麼會令它好些？\n休息｜熱敷｜冷敷｜按摩｜藥物（可寫藥名）｜無'));
-  }
-
-  if (state === 'RELIEVING') {
-    current = complaints[complaints.length - 1];
-    current.relieving = text.split(/[，,\/\n\s]+/).filter(Boolean).slice(0, 6);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('ASSOCIATED');
-    return res.send(reply('⚠️ 有沒有伴隨症狀？（可多選）\n發燒｜嘔吐｜腹瀉｜便秘｜咳嗽/有痰｜頭晕/暈厥｜胸悶｜下肢腫｜視力模糊｜尿頻/尿痛｜陰部分泌物異常｜無｜其他'));
-  }
-
-  if (state === 'ASSOCIATED') {
-    current = complaints[complaints.length - 1];
-    current.associated = text.split(/[，,\/\n\s]+/).filter(Boolean).slice(0, 10);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('SEVERITY');
-    return res.send(reply('📏 請以 0～10 評分嚴重程度（0=不困擾，10=最嚴重）：'));
-  }
-
-  if (state === 'SEVERITY') {
-    current = complaints[complaints.length - 1];
-    const n = Math.max(0, Math.min(10, parseInt(text, 10)));
-    current.severity_nrs = isNaN(n) ? null : n;
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('IMPACT');
-    return res.send(reply('🏷️ 影響日常活動嗎？\n無｜輕微影響｜需要休息｜無法工作/上學'));
-  }
-
-  if (state === 'IMPACT') {
-    current = complaints[complaints.length - 1];
-    current.impact = text.slice(0, 20);
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('SAFETY_FLAGS');
-    return res.send(reply('請確認是否有以下任一：\n胸口劇痛／呼吸很困難／單側無力或說話困難／大量吐血或黑便／>39℃ 高燒超過24小時\n（有/沒有；若有，請簡述）'));
-  }
-
-  if (state === 'SAFETY_FLAGS') {
-    current = complaints[complaints.length - 1];
-    current.safety_flags = [text];
-
-    const summary =
-      `主訴：${(current.loc_display||[]).join('+')} ${((current.sensation_display||[])[0]||'不適')}\n` +
-      `起病：${current.onset}；病程：${current.course}\n` +
-      `加重：${(current.aggravating||[]).join('、')||'未述'}；緩解：${(current.relieving||[]).join('、')||'未述'}\n` +
-      `伴隨：${(current.associated||[]).join('、')||'無'}\n` +
-      `嚴重度：${current.severity_nrs ?? '未評'}；影響：${current.impact||'未述'}\n` +
-      `危險徵象：${(current.safety_flags||[]).join('、')}`;
-
-    current.summary_text = summary;
-    complaints[complaints.length - 1] = current;
-    await ref.update({ complaints });
-    await setState('REVIEW');
-    return res.send(reply('✅ 我會把你剛才的回答整理給你核對。輸入「對」或輸入「要修改 + 欲修改項目名稱」。'));
-  }
-
-  if (state === 'REVIEW') {
-    if (/^對$/.test(text)) {
-      await setState('SUMMARY');
-      current = complaints[complaints.length - 1];
-      const summaryMsg = `🧾 摘要：\n${String(current.summary_text || '')}\n\n要「新增主訴」嗎？（是/否）`;
-      return res.send(reply(summaryMsg));
-    }
-    // 簡化：若要修改，直接回到第一個問題
-    await setState('MAIN_COMPLAINT_LOC');
-    return res.send(reply('好的，請重新輸入主要部位（可多選）。'));
-  }
-
-  if (state === 'SUMMARY') {
-    if (/^是$/.test(text)) {
-      complaints.push({ id: 'cmp_' + Date.now(), loc_display: [] });
-      await ref.update({ complaints });
-      await setState('MAIN_COMPLAINT_LOC');
-      return res.send(reply('❓第二個主訴：主要哪裡不舒服？'));
-    }
-    await setState('DONE');
-    return res.send(reply('完成，感謝你！若情況加劇，請及早就醫或致電緊急服務。'));
-  }
-
-  // DONE 或其他
-  return res.send(reply('你已完成預先問診。輸入「重來」可重新開始。'));
+  return res.type('text/xml').send(twiml.toString());
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log('WhatsApp triage bot listening on ' + port));
+// 健康檢查
+app.get('/', (_req, res) => res.send('PreDoctor AI flow server running.'));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on :${PORT}`);
+});
+
+
 
 
 
