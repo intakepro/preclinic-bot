@@ -1,234 +1,237 @@
-
-// index.js — 單檔可部署版（Twilio WhatsApp + Firestore）
-// ----------------------------------------------------------
-
+// index.js
 const express = require('express');
-const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
 const admin = require('firebase-admin');
+const bodyParser = require('body-parser');
 
-// --- Firestore 初始化（Render 建議用環境變數 FIREBASE_SERVICE_ACCOUNT） ---
+// --- Firestore 初始化（兩種方式擇一） ---
+// 方式 A：用 GOOGLE_APPLICATION_CREDENTIALS 指向 service account JSON 檔
+// admin.initializeApp();
+
+// 方式 B：用環境變數 FIREBASE_SERVICE_ACCOUNT（Render/雲端常用）
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  admin.initializeApp({ credential: admin.credential.cert(sa) });
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
 } else {
-  // 本機開發可用 GOOGLE_APPLICATION_CREDENTIALS
+  // 本機開發：讀檔或用 ADC
   admin.initializeApp();
 }
+
 const db = admin.firestore();
 
-// -------------------- 工具：回覆 --------------------
-function sendReply(res, twiml, text) {
-  twiml.message(text);
-  res.type('text/xml').send(twiml.toString());
-}
-
-// -------------------- 工具：Session --------------------
-async function getSession(phone) {
-  const ref = db.collection('sessions').doc(phone);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    const fresh = {
-      phone,
-      module: 'patientName',
-      state: 'INIT', // INIT | MENU | ADD_NAME | ADD_GENDER | ADD_YEAR | ADD_ID | DELETE_MENU | VIEW_PROFILE
-      temp: {},
-      updatedAt: new Date()
-    };
-    await ref.set(fresh);
-    return fresh;
-  }
-  return snap.data();
-}
-async function saveSession(session) {
-  session.updatedAt = new Date();
-  await db.collection('sessions').doc(session.phone).set(session, { merge: true });
-}
-
-// -------------------- 工具：帳號/病人資料 --------------------
-async function ensureAccount(phone) {
-  const userRef = db.collection('users').doc(phone);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    await userRef.set({ phone, createdAt: new Date(), updatedAt: new Date() });
-    return { createdNow: true };
-  } else {
-    await userRef.set({ updatedAt: new Date() }, { merge: true });
-    return { createdNow: false };
-  }
-}
-
-async function listPatients(phone) {
-  const snap = await db.collection('users').doc(phone).collection('patients')
-    .orderBy('createdAt', 'asc')
-    .get();
-  const out = [];
-  snap.forEach(d => out.push({ id: d.id, ...d.data() }));
-  return out.slice(0, 8);
-}
-
-async function addPatient(phone, data) {
-  const col = db.collection('users').doc(phone).collection('patients');
-  const now = new Date();
-  const payload = {
-    name: data.name,
-    gender: data.gender,       // '男' | '女'
-    birthYear: data.birthYear, // number
-    idNumber: data.idNumber,   // string
-    createdAt: now,
-    updatedAt: now
-  };
-  const docRef = await col.add(payload);
-  return { id: docRef.id, ...payload };
-}
-
-async function deletePatient(phone, patientId) {
-  await db.collection('users').doc(phone).collection('patients').doc(patientId).delete();
-}
-
-// -------------------- 驗證 --------------------
-function isValidGender(t) { return t === '男' || t === '女'; }
-function isValidYear(t) {
-  const y = Number(t);
-  const now = new Date().getFullYear();
-  return Number.isInteger(y) && y >= 1900 && y <= now;
-}
-function isValidId(t) { return typeof t === 'string' && t.trim().length >= 4; }
-
-// -------------------- 文字樣板 --------------------
-function renderMenu(patients, firstTime = false) {
-  const lines = [];
-  if (firstTime || patients.length === 0) {
-    lines.push('👋 歡迎使用。偵測到這是你首次使用或尚未建立資料。');
-    lines.push('請先新增一位病人（依序輸入：姓名→性別→出生年份→身份證號）。');
-    lines.push('');
-    lines.push('回覆「1」開始新增。');
-    return lines.join('\n');
-  }
-
-  lines.push('👤 請選擇或新增病人：');
-  patients.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`));
-  lines.push(`${patients.length + 1}. ➕ 新增病人`);
-  lines.push('');
-  lines.push('請回覆編號（例如：1）。');
-  return lines.join('\n');
-}
-
-function renderDeleteMenu(patients) {
-  const lines = [];
-  lines.push('📦 已達上限：此帳號最多可儲存 8 位病人。');
-  lines.push('請選擇要刪除的一位病人：');
-  patients.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`));
-  lines.push('');
-  lines.push('回覆編號刪除，或輸入 0 返回上一頁。');
-  return lines.join('\n');
-}
-
-function renderProfile(p) {
-  return [
-    '📄 病人個人資料',
-    `姓名：${p.name}`,
-    `性別：${p.gender}`,
-    `出生年份：${p.birthYear}`,
-    `身份證號碼：${p.idNumber}`
-  ].join('\n');
-}
-
-// -------------------- 主路由：任何訊息即進入本模組 --------------------
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-app.post('/whatsapp', async (req, res) => {
-  const twiml = new MessagingResponse();
-  const from = (req.body.From || '').replace('whatsapp:', ''); // e.g. +852XXXXXXXX
-  const body = (req.body.Body || '').trim();
+// 小工具：正規化電話（Twilio From: 'whatsapp:+8869xxxxxxx'）
+function normalizePhone(from) {
+  if (!from) return '';
+  return from.replace(/^whatsapp:/, '');
+}
 
-  // 1) 建立/更新帳號；抓 session
-  await ensureAccount(from);
-  let session = await getSession(from);
-  session.module = 'patientName'; // 單模組檔
+// 取得或建立 session
+async function getOrCreateSession(phone) {
+  const ref = db.collection('sessions').doc(phone);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    await ref.set({ state: 'init', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { state: 'init' };
+  }
+  return snap.data();
+}
 
-  // 2) 抓目前名單
-  let patients = await listPatients(from);
+// 更新 session
+async function updateSession(phone, data) {
+  const ref = db.collection('sessions').doc(phone);
+  await ref.set({ ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+}
 
-  // 3) 首次使用或沒有名單 → 直接導向新增流程
-  if (session.state === 'INIT') {
-    if (patients.length === 0) {
-      session.state = 'ADD_NAME';
-      session.temp = {};
-      await saveSession(session);
-      return sendReply(res, twiml, '首次使用：請新增病人。\n\n1️⃣ 請輸入姓名（請依「身份證姓名」輸入）：');
-    } else {
-      session.state = 'MENU';
-      await saveSession(session);
-      return sendReply(res, twiml, renderMenu(patients));
+// 讀取該電話底下的所有病人清單
+async function listPatientsByPhone(phone) {
+  const ref = db.collection('phones').doc(phone);
+  const snap = await ref.get();
+  if (!snap.exists) return [];
+  const data = snap.data() || {};
+  return data.patients || [];
+}
+
+// 將新病人掛到該電話
+async function attachPatientToPhone(phone, patientId, name) {
+  const ref = db.collection('phones').doc(phone);
+  await ref.set({
+    patients: admin.firestore.FieldValue.arrayUnion({ id: patientId, name }),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+// 建立新病人檔
+async function createPatient({ phone, name, gender, birthYear }) {
+  const patientRef = db.collection('patients').doc();
+  const patient = {
+    phone,
+    name,
+    gender: gender || null,
+    birthYear: birthYear || null,
+    allergies: [],
+    chronic: [],
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  };
+  await patientRef.set(patient);
+  return { id: patientRef.id, ...patient };
+}
+
+// 問診第一題（你之後可換成你的正式流程）
+function firstQuestion() {
+  return '第1題：❓請先描述「哪裡不舒服？」（可輸入文字，例如：右上腹、左膝、胸口）';
+}
+
+// 產生病人清單文字
+function patientsListMessage(patients) {
+  const lines = patients.map((p, idx) => `${idx + 1}. ${p.name}`);
+  lines.push('0. ➕ 新增病人');
+  return `我們找到以下曾經登記的病人，請回覆序號或姓名：\n` + lines.join('\n');
+}
+
+// 解析使用者選擇（數字或姓名）
+function resolvePatientSelection(input, patients) {
+  const trimmed = input.trim();
+  // 數字
+  if (/^\d+$/.test(trimmed)) {
+    const n = parseInt(trimmed, 10);
+    if (n === 0) return { type: 'new' };
+    if (n >= 1 && n <= patients.length) {
+      return { type: 'existing', patient: patients[n - 1] };
     }
   }
+  // 姓名比對（全等忽略空白）
+  const byName = patients.find(p => p.name.replace(/\s/g, '') === trimmed.replace(/\s/g, ''));
+  if (byName) return { type: 'existing', patient: byName };
+  return null;
+}
 
-  // 4) 狀態機
-  switch (session.state) {
-    case 'MENU': {
-      const n = Number(body);
-      // 若沒有病人且使用者回其它字 → 引導新增
-      if (patients.length === 0) {
-        session.state = 'ADD_NAME';
-        session.temp = {};
-        await saveSession(session);
-        return sendReply(res, twiml, '首次使用：請新增病人。\n\n1️⃣ 請輸入姓名（請依「身份證姓名」輸入）：');
-      }
-      if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
-        if (n <= patients.length) {
-          const chosen = patients[n - 1];
-          session.state = 'VIEW_PROFILE';
-          session.temp = { viewId: chosen.id };
-          await saveSession(session);
-          return sendReply(res, twiml, `${renderProfile(chosen)}\n\n（已回到主選單）\n\n${renderMenu(patients)}`);
+// WhatsApp Webhook
+app.post('/whatsapp', async (req, res) => {
+  const twiml = new MessagingResponse();
+  try {
+    const body = (req.body.Body || '').trim();
+    const from = normalizePhone(req.body.From); // e.g. '+8869xxxxxxx'
+
+    if (!from) {
+      twiml.message('無法取得您的電話號碼，請稍後再試。');
+      return res.type('text/xml').send(twiml.toString());
+    }
+
+    let session = await getOrCreateSession(from);
+
+    // 狀態機
+    switch (session.state) {
+      case 'init': {
+        const patients = await listPatientsByPhone(from);
+        if (patients.length > 0) {
+          await updateSession(from, { state: 'awaiting_select_existing_patient' });
+          twiml.message(patientsListMessage(patients));
+        } else {
+          await updateSession(from, { state: 'awaiting_new_name', tempNewPatient: {} });
+          twiml.message('看起來您是第一次使用。請先輸入病人「姓名」。');
         }
-        // 新增
-        if (n === patients.length + 1) {
-          if (patients.length >= 8) {
-            session.state = 'DELETE_MENU';
-            await saveSession(session);
-            return sendReply(res, twiml, renderDeleteMenu(patients));
-          }
-          session.state = 'ADD_NAME';
-          session.temp = {};
-          await saveSession(session);
-          return sendReply(res, twiml, '1️⃣ 請輸入姓名（請依「身份證姓名」輸入）：');
+        break;
+      }
+
+      case 'awaiting_select_existing_patient': {
+        const patients = await listPatientsByPhone(from);
+        const choice = resolvePatientSelection(body, patients);
+        if (!choice) {
+          twiml.message('抱歉我沒看懂您的選擇。請回覆序號（例如 1）或直接回覆姓名；若要新增，回覆 0。');
+          break;
         }
+        if (choice.type === 'new') {
+          await updateSession(from, { state: 'awaiting_new_name', tempNewPatient: {} });
+          twiml.message('請輸入新病人的「姓名」。');
+        } else {
+          const { id, name } = choice.patient;
+          await updateSession(from, { state: 'triage_q1', currentPatientId: id });
+          twiml.message(`已選擇：${name}\n${firstQuestion()}`);
+        }
+        break;
       }
-      // 不是有效數字 → 再顯示選單
-      await saveSession(session);
-      return sendReply(res, twiml, renderMenu(patients));
-    }
 
-    case 'ADD_NAME': {
-      if (!body) return sendReply(res, twiml, '請輸入有效的姓名（身份證姓名）：');
-      session.temp.name = body;
-      session.state = 'ADD_GENDER';
-      await saveSession(session);
-      return sendReply(res, twiml, '2️⃣ 請輸入性別（回覆「男」或「女」）：');
-    }
-
-    case 'ADD_GENDER': {
-      if (!isValidGender(body)) return sendReply(res, twiml, '格式不正確。請回覆「男」或「女」。');
-      session.temp.gender = body;
-      session.state = 'ADD_YEAR';
-      await saveSession(session);
-      return sendReply(res, twiml, '3️⃣ 請輸入出生年份（例如：1978）：');
-    }
-
-    case 'ADD_YEAR': {
-      if (!isValidYear(body)) {
-        const now = new Date().getFullYear();
-        return sendReply(res, twiml, `年份不正確。請輸入 1900–${now} 的四位數年份：`);
+      case 'awaiting_new_name': {
+        const name = body;
+        const temp = { ...(session.tempNewPatient || {}), name };
+        await updateSession(from, { state: 'awaiting_new_gender', tempNewPatient: temp });
+        twiml.message('請輸入性別（M/F/Other）。');
+        break;
       }
-      session.temp.birthYear = Number(body);
-      session.state = 'ADD_ID';
-      await saveSession(session);
-      return sendReply(res, twiml, '4️⃣ 請輸入身份證號碼：');
+
+      case 'awaiting_new_gender': {
+        const g = body.toUpperCase();
+        const gender = (g === 'M' || g === 'F') ? g : 'Other';
+        const temp = { ...(session.tempNewPatient || {}), gender };
+        await updateSession(from, { state: 'awaiting_new_birthYear', tempNewPatient: temp });
+        twiml.message('請輸入出生年份（例如：1990）。');
+        break;
+      }
+
+      case 'awaiting_new_birthYear': {
+        const y = parseInt(body, 10);
+        if (!/^\d{4}$/.test(String(y)) || y < 1900 || y > new Date().getFullYear()) {
+          twiml.message('出生年份格式不正確，請以四位數年份輸入（例如：1990）。');
+          break;
+        }
+        const temp = { ...(session.tempNewPatient || {}), birthYear: y };
+        // 建立病人檔
+        const newPatient = await createPatient({
+          phone: from,
+          name: temp.name,
+          gender: temp.gender,
+          birthYear: temp.birthYear
+        });
+        await attachPatientToPhone(from, newPatient.id, newPatient.name);
+        await updateSession(from, { state: 'triage_q1', currentPatientId: newPatient.id, tempNewPatient: {} });
+        twiml.message(`✅ 建檔完成，謝謝！\n${firstQuestion()}`);
+        break;
+      }
+
+      case 'triage_q1': {
+        // 這裡開始接你的問診流程邏輯（把 body 視為第1題的回答）
+        // 範例：先存進 conversations（選擇性）
+        await db.collection('conversations').add({
+          phone: from,
+          patientId: session.currentPatientId || null,
+          step: 'q1_location',
+          answer: body,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 下一題（示範）
+        twiml.message('第2題：💢不舒服的感覺是什麼？（痛、麻、癢、刺、壓痛…可複選以逗號分隔）');
+        // 你也可以在這裡 updateSession 進入下一個 state
+        await updateSession(from, { state: 'triage_q2' });
+        break;
+      }
+
+      default: {
+        // 未覆蓋的狀態，回到 init
+        await updateSession(from, { state: 'init' });
+        twiml.message('我們繼續吧！請稍等重新確認您的資料…');
+        break;
+      }
     }
 
-    case 'ADD_ID': {
-      if (!isValidId(body)) return sendRe
+    res.type('text/xml').send(twiml.toString());
+  } catch (err) {
+    console.error(err);
+    twiml.message('系統忙線或發生錯誤，請稍後再試。');
+    res.type('text/xml').send(twiml.toString());
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log('Server running on port', PORT);
+});
+
+
 
