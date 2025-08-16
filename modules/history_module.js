@@ -11,7 +11,7 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const db = admin.firestore();
+
 
 /** Firestore 資料結構
  * patients/{phone}:
@@ -365,5 +365,6 @@ module.exports = {
   handleHistoryModule,
   STATES
 };
+
 
 
