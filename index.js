@@ -1,13 +1,14 @@
 // index.js
 // WhatsApp Webhook（Twilio）＋ 模組 1/2/3/4 串接
-// 特性：使用者在 1 結束後、或 2/3 任一步驟輸入「0」→ 直接跳到 4（病史）
+// 特性：在 1 結束後或 2/3 任一步驟輸入「0」→ 直接跳到 4（病史）
+// 已加入 try/catch 與保護；搭配 modules/history_module.js（無需修改）
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
 
 const { handleHistoryModule } = require('./modules/history_module');
-const { handleNameInput } = require('./modules/name_input'); // ← 已改為 {from, body}
+const { handleNameInput } = require('./modules/name_input');
 
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
@@ -16,7 +17,7 @@ const db = admin.firestore();
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ==== 流程定義 ====
+// ===== 流程定義 =====
 const STEPS = [
   { id: 1, key: 'name_input', name: '輸入病人名字模組' },
   { id: 2, key: 'auth',       name: '病人問診權限檢查模組（可跳過）' },
@@ -24,7 +25,7 @@ const STEPS = [
   { id: 4, key: 'history',    name: '病史模組' },
 ];
 
-const userStep = {}; // 記憶體版步驟進度（可之後改 Firestore 永續化）
+const userStep = {}; // 記憶體版進度（可改 Firestore 永續化）
 
 function getCurrentStepKey(from) {
   const idx = userStep[from] ?? 1;
@@ -32,19 +33,19 @@ function getCurrentStepKey(from) {
 }
 function setStep(from, id) { userStep[from] = id; }
 function advanceStep(from) {
-  const current = userStep[from] ?? 1;
-  userStep[from] = Math.min(current + 1, STEPS.length);
+  const cur = userStep[from] ?? 1;
+  userStep[from] = Math.min(cur + 1, STEPS.length);
 }
 
-// ====== 模組 2：權限（示範）======
+// ===== 模組 2：權限（示例）=====
 async function handleAuthModule({ body }) {
   if ((body || '').trim() === '0') {
     return { text: '⏭️ 已跳過【問診權限檢查】並直接前往病史模組。', skipToStep: 4 };
   }
-  return { text: '✅ 問診權限檢查通過（提示：輸入 0 可直接前往病史）。', done: true };
+  return { text: '✅ 問診權限檢查通過（提示：此處可輸入 0 直接到病史）。', done: true };
 }
 
-// ====== 模組 3：極簡 Profile 子流程（可跳過）======
+// ===== 模組 3：極簡 Profile（可跳過）=====
 const PROFILE_STATE = {
   ENTRY: 'PROFILE_ENTRY',
   SHOW: 'PROFILE_SHOW',
@@ -126,66 +127,75 @@ async function handleProfileModule({ from, body }) {
   return { text: '（提示）基本資料已完成。', done: true };
 }
 
-// ====== 路由器（含全域 0 跳到 step 4）======
+// ===== 路由器（含全域 0 跳到 step 4）=====
 async function stateRouter({ from, body }) {
   const input = (body || '').trim();
 
-  // 全域「0」：尚未到病史前，可直接跳到 4
+  // 全域「0」：尚未到病史（4）可直接跳過
   const currentId = userStep[from] ?? 1;
   if (input === '0' && currentId < 4) {
     setStep(from, 4);
     return '⏭️ 已依您的指示跳過中間步驟，直接前往【病史模組】。';
-    // 下一則訊息就會進入 history
   }
 
   const key = getCurrentStepKey(from);
 
-  // 1) 名字模組（已改介面：{ from, body }）
+  // 1) 名字模組（相容版 name_input.js）
   if (key === 'name_input') {
-    const resp = await handleNameInput({ from, body });
+    let resp;
+    try {
+      resp = await handleNameInput({ from, body }); // 用新介面
+    } catch (e) {
+      console.error('[name_input] error:', e);
+      resp = '系統暫時無法處理姓名輸入，請再試一次。';
+    }
     const done = typeof resp === 'string' && /完成|已記錄|下一步|進入下一步/.test(resp);
     if (done) advanceStep(from);
-    return (resp || '請輸入您的名字（例如：陳大文）\n（提示：若要略過 2、3 直接到病史，之後可輸入 0）');
+    return resp || '請輸入您的名字（例如：陳大文）\n（提示：之後可輸入 0 直接到病史）';
   }
 
   // 2) 權限（可跳過）
   if (key === 'auth') {
     const { text, done, skipToStep } = await handleAuthModule({ body });
-    if (skipToStep) { setStep(from, skipToStep); }
-    else if (done) { advanceStep(from); }
+    if (skipToStep) setStep(from, skipToStep);
+    else if (done)  advanceStep(from);
     return text + '\n（提示：若要直接到病史，隨時輸入 0）';
   }
 
   // 3) 基本資料（可跳過）
   if (key === 'profile') {
     const { text, done, skipToStep } = await handleProfileModule({ from, body });
-    if (skipToStep) { setStep(from, skipToStep); }
-    else if (done) { advanceStep(from); }
+    if (skipToStep) setStep(from, skipToStep);
+    else if (done)  advanceStep(from);
     return text + '\n（提示：若要直接到病史，隨時輸入 0）';
   }
 
   // 4) 病史模組
   if (key === 'history') {
-    const reply = await handleHistoryModule({ from, body });
-    return reply;
+    try {
+      const reply = await handleHistoryModule({ from, body });
+      return reply;
+    } catch (e) {
+      console.error('[history] error:', e);
+      return '系統暫時無法處理病史，請稍後再試 🙏';
+    }
   }
 
   return `目前在模組：${key}`;
 }
 
 app.post('/whatsapp', async (req, res) => {
-  const from = (req.body.From || '').replace(/^whatsapp:/, '').trim();
-  const body = (req.body.Body || '').trim();
+  const from = String(req.body?.From || '').replace(/^whatsapp:/, '').trim();
+  const body = String(req.body?.Body || '').trim();
 
   const twiml = new MessagingResponse();
   try {
     const replyMsg = await stateRouter({ from, body });
     twiml.message(replyMsg);
   } catch (err) {
-    console.error('Error:', err);
+    console.error('Webhook Error:', err);
     twiml.message('系統忙碌或發生錯誤，請稍後再試 🙏');
   }
-
   res.type('text/xml').send(twiml.toString());
 });
 
@@ -193,6 +203,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ WhatsApp 問診機器人運行中，port: ${PORT}`);
 });
+
+
 
 
 
