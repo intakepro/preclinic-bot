@@ -10,7 +10,7 @@ const { MessagingResponse } = require('twilio').twiml;
 const { handleHistoryModule } = require('./modules/history_module');
 const { handleNameInput } = require('./modules/name_input');
 
-const admin = require('../lib/firebase'); 
+const admin = require('./lib/firebase'); 
 const db = admin.firestore();
 
 const app = express();
@@ -202,6 +202,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ WhatsApp 問診機器人運行中，port: ${PORT}`);
 });
+
 
 
 
