@@ -30,11 +30,8 @@ function db() { ensureFirebase(); return admin.firestore(); }
 async function ensureAccount(phone) {
   const userRef = db().collection('users').doc(phone);
   const s = await userRef.get();
-  if (!s.exists) {
-    await userRef.set({ phone, createdAt: new Date(), updatedAt: new Date() });
-  } else {
-    await userRef.set({ updatedAt: new Date() }, { merge: true });
-  }
+  if (!s.exists) await userRef.set({ phone, createdAt: new Date(), updatedAt: new Date() });
+  else await userRef.set({ updatedAt: new Date() }, { merge: true });
 }
 async function listPatients(phone) {
   const snap = await db().collection('users').doc(phone).collection('patients')
@@ -81,7 +78,7 @@ async function getFSSession(phone) {
 }
 async function saveFSSession(session) {
   if (!session || !session.phone || !session.phone.trim()) {
-    throw new Error(`[name_input.saveFSSession] invalid phone: ${session && session.phone}`);
+    throw new Error(`name_input.saveFSSession invalid phone: ${session && session.phone}`);
   }
   session.updatedAt = new Date();
   await db().collection('sessions').doc(session.phone).set(session, { merge: true });
@@ -136,17 +133,12 @@ function renderProfile(p) {
 }
 
 // --- 匯出：主處理器 ---
-// args: {
-//   req, res, from, msg,
-//   onComplete({ phone, patientId, name }),
-//   advanceNext(),
-//   onBack()   // <— 新增：於本模組第一題（ADD_NAME）按 0 時呼叫
-// }
+// args: { req, res, from, msg, onComplete({ phone, patientId, name }), advanceNext() }
 async function handleNameInput(args) {
-  const { req, res, from, msg, onComplete, advanceNext, onBack } = args;
+  const { req, res, from, msg, onComplete, advanceNext } = args;
   const twiml = new MessagingResponse();
 
-  const rawFrom = (from || (req.body.From ?? req.body.FromNumber ?? '')).toString();
+  const rawFrom = from || (req.body.From ?? req.body.FromNumber ?? '').toString();
   const phone = rawFrom.replace(/^whatsapp:/i, '').trim();
   const body  = (msg ?? req.body.Body ?? '').toString().trim();
 
@@ -194,14 +186,17 @@ async function handleNameInput(args) {
         if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
           if (n <= patients.length) {
             const chosen = patients[n - 1];
+            // 回傳給主流程：完成
             if (typeof onComplete === 'function') {
               onComplete({ phone, patientId: chosen.id, name: chosen.name });
             }
+            // 顯示個資 + 提示已選取，讓主流程將步驟前進到第 2 步
             twiml.message(`${renderProfile(chosen)}\n\n✅ 已選擇此病人，將進入下一步。`);
             res.type('text/xml').send(twiml.toString());
             if (typeof advanceNext === 'function') advanceNext();
             return { replied: true, advance: true };
           }
+          // 新增
           if (n === patients.length + 1) {
             if (patients.length >= 8) {
               session.state = 'DELETE_MENU';
@@ -226,14 +221,6 @@ async function handleNameInput(args) {
 
       case 'ADD_NAME': {
         if (isBackKey(body)) {
-          // ★ 新增：若外層有提供 onBack，按 0 直接回上一模組
-          if (typeof onBack === 'function') {
-            try { onBack({ phone }); } catch (e) { console.error('[name_input] onBack error:', e); }
-            twiml.message('↩️ 已返回上一個流程。');
-            res.type('text/xml').send(twiml.toString());
-            return { replied: true, advance: false };
-          }
-          // 若未提供 onBack，則回到本模組 MENU（維持舊版行為）
           session.state = 'MENU';
           await saveFSSession(session);
           twiml.message(renderMenu(patients, patients.length === 0));
@@ -363,9 +350,8 @@ async function handleNameInput(args) {
     }
   } catch (err) {
     console.error('[name_input] error:', err && err.stack ? err.stack : err);
-    const twiml2 = new MessagingResponse();
-    twiml2.message('系統暫時忙碌，請稍後再試。');
-    res.type('text/xml').send(twiml2.toString());
+    twiml.message('系統暫時忙碌，請稍後再試。');
+    res.type('text/xml').send(twiml.toString());
     return { replied: true, advance: false };
   }
 }
