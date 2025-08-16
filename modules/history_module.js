@@ -1,7 +1,7 @@
 // modules/history_module.js
 // 病史模組（支援：首次/修改、數字選單、Firestore 永續化）
 
-const admin = require('firebase-admin');
+const admin = require('../lib/firebase');
 
 // 確保整個專案只初始化一次
 if (!admin.apps.length) {
@@ -364,3 +364,4 @@ module.exports = {
   handleHistoryModule,
   STATES
 };
+
