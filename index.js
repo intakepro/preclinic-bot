@@ -1,84 +1,78 @@
-// File: index.js | v0.1
-// 說明：主流程，順序呼叫 7 個模組；支援隨時輸入 `restart` / `end`
+// index.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const { MessagingResponse } = require('twilio').twiml;
 
-const readline = require('readline');
+const app = express();
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
-// --- 導入各模組 ---
-const step1 = require('./modules/permission_check_first');
-const step2 = require('./modules/patient_profile');
-const step3 = require('./modules/permission_check_second');
-const step4 = require('./modules/patient_history');
-const step5 = require('./modules/intake_questionnaire');
-const step6 = require('./modules/ai_summary');
-const step7 = require('./modules/export_summary');
+// --- 載入 7 個佔位模組（順序執行） ---
+const steps = [
+  require('./modules/step1_permission_check'),
+  require('./modules/step2_patient_profile'),
+  require('./modules/step3_permission_check_2'),
+  require('./modules/step4_history_module'),
+  require('./modules/step5_interview_module'),
+  require('./modules/step6_ai_summary'),
+  require('./modules/step7_export_summary'),
+];
 
-// --- 全域控制旗標 ---
-let shouldRestart = false;
-let shouldEnd = false;
-
-// 建立 stdin 監聽，任何時候輸入 `restart` 或 `end` 都生效
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-rl.setPrompt('> ');
-rl.on('line', (line) => {
-  const cmd = String(line || '').trim().toLowerCase();
-  if (cmd === 'restart') {
-    console.log('🔄 收到 restart 指令：流程將從最開頭重新開始。');
-    shouldRestart = true;
-  } else if (cmd === 'end') {
-    console.log('👋 收到 end 指令：謝謝，程序完結。');
-    shouldEnd = true;
-  } else {
-    console.log('（提示：輸入 `restart` 可重來；輸入 `end` 可結束）');
+// 小工具：順序跑模組
+async function runFlow(ctx) {
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const label = `[STEP ${i + 1}]`;
+    console.log(`${label} 開始模組執行 ───`);
+    try {
+      await step(ctx); // 每個模組只需 console.log，然後 return
+      console.log(`${label} 完成，將自動進入下一步 👌`);
+    } catch (err) {
+      console.error(`${label} 發生錯誤：`, err);
+      // 不中斷服務，但結束本次流程
+      break;
+    }
   }
-  rl.prompt();
+  console.log('🎉 全部流程模組已經跑完（本次會話）');
+}
+
+// 健康檢查/首頁
+app.get('/', (_req, res) => {
+  res.send('Pre-clinic WhatsApp service is up. ✅');
 });
 
-// 小工具：檢查是否要重啟或結束
-function checkControl() {
-  if (shouldEnd) {
-    console.log('🙏 謝謝程序完結');
-    process.exit(0);
-  }
-  if (shouldRestart) {
-    shouldRestart = false; // 清回來，避免無限重啟
-    return true;           // 呼叫端據此決定重新開始
-  }
-  return false;
-}
+// Twilio WhatsApp Webhook（接收病人訊息）
+app.post('/whatsapp', async (req, res) => {
+  const twiml = new MessagingResponse();
 
-// 主流程
-async function runFlow() {
-  console.clear();
-  console.log('你好，我喺X醫生的預先問診系統，我哋現在開始啦😊');
-  console.log('（任何時候輸入 `restart` 立即重來；輸入 `end` 立即結束）\n');
+  // 你可以從 Twilio 取用者資訊／訊息
+  const from = req.body.From || '';
+  const body = (req.body.Body || '').trim();
 
-  const steps = [
-    { fn: step1, name: '第一次權限檢查模組' },
-    { fn: step2, name: '病人個人資料模組' },
-    { fn: step3, name: '第二次權限檢查模組' },
-    { fn: step4, name: '病人病史模組' },
-    { fn: step5, name: '問診系統模組' },
-    { fn: step6, name: 'AI整理模組' },
-    { fn: step7, name: '匯出總結模組' },
-  ];
+  // 歡迎語（立即回覆 Twilio）
+  const welcome =
+    '你好，我喺X醫生的預先問診系統，我哋現在開始啦😊\n' +
+    '系統已啟動流程，請稍等～';
+  twiml.message(welcome);
 
-  for (let i = 0; i < steps.length; i++) {
-    // 每步開始先檢查控制旗標
-    if (checkControl()) return runFlow(); // 重新開始
-    const stepNo = i + 1;
-    await steps[i].fn({ stepNo, stepName: steps[i].name });
+  // 先回應 Twilio（避免超時），之後在背景順序跑 7 個模組（寫入 log）
+  res.type('text/xml').send(twiml.toString());
 
-    // 每步完成後再檢查一次（可能在模組顯示過程中使用者下了指令）
-    if (checkControl()) return runFlow();
-  }
+  // 背景上下文，可放從 Twilio 取得的資料、Firestore 連線等
+  const ctx = { from, body, ts: Date.now() };
+  runFlow(ctx).catch(err => console.error('Flow error:', err));
+});
 
-  console.log('\n✅ 問診已完成，你的資料已傳送給醫生。謝謝你，祝你身體早日康復❤️');
-  process.exit(0);
-}
+// 保活：Render 期望有一個長駐 HTTP 服務
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🟢 Server is running on port ${PORT}`);
+});
 
-// 啟動
-rl.prompt();
-runFlow().catch((err) => {
-  console.error('流程發生錯誤：', err);
-  process.exit(1);
+// 全域錯誤保護
+process.on('unhandledRejection', err => {
+  console.error('UnhandledRejection:', err);
+});
+process.on('uncaughtException', err => {
+  console.error('UncaughtException:', err);
 });
