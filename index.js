@@ -1,12 +1,11 @@
 /**
  * Module: index.js
- * Version: v3.1.0
+ * Version: v3.2.0
  * Date: 2025-08-17
- * 變更摘要：
- * - 兼容模組回傳三種型式：{replied, autoNext} / 純文字含 [[AUTO_NEXT]] / 純文字
- * - 修正 history 模組完成後不前進與多餘訊息的問題
- * - 保持規則：0 只適用於佔位模組；第 4 步不可用 0 跳過
- * - 首次進入顯示歡迎語；完成步驟自動前進（autoNext）
+ * 更新內容：
+ * - 修正 restart/首次進入時只停留在歡迎畫面：現在直接委派到 name_input 問第一題（自動開始）
+ * - 保持「0 僅適用佔位模組」，第 4 步 history 取消 0 跳過
+ * - 兼容模組回傳 {replied, autoNext} / 純文字 + [[AUTO_NEXT]] / 純文字
  */
 
 const express = require('express');
@@ -39,59 +38,33 @@ function getSession(from) {
   return sessions.get(from);
 }
 
-// UI
+// UI（歡迎語仍保留作為文案，實際由 name_input 發第一題）
+function welcomeText() {
+  return [
+    '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊',
+    '',
+    '提示：任何題目可用 0 / prev / ← 回上一題（由各模組處理）。',
+    '在尚未完成的佔位步驟（2/3/5/6/7）輸入 0 會跳到下一步。'
+  ].join('\n');
+}
 function placeholderMessage(step) {
   return [
     `🔧 【${step.id}. ${step.name}】`,
     `此步驟暫為佔位畫面。請輸入「0」跳去下一個流程。`
   ].join('\n');
 }
-function welcomeText() {
-  return [
-    '👋 歡迎使用 A醫生問診系統，我哋而家開始啦⋯⋯😊',
-    '',
-    '此版本會依序呼叫 7 個模組。',
-    '第 1 步已整合「輸入病人名字模組」，第 4 步已整合「病史模組」。',
-    '其餘步驟暫時為佔位畫面。',
-    '',
-    '📌 指令：',
-    '  restart  ➝ 回到第 1 步',
-    '  help     ➝ 顯示步驟清單',
-    '',
-    '（在第 1 步，數字 0 代表「上一頁」（由模組內處理）；',
-    ' 在第 2、3、5、6、7（佔位）可用 0 前進；第 4 步不可用 0 跳過。）'
-  ].join('\n');
-}
-function helpText() {
-  const lines = STEPS.map(s => `  ${s.id}. ${s.name}`);
-  return ['📖 流程步驟清單：', ...lines].join('\n');
-}
 
-// ====== 模組回傳統一處理 ======
+// —— 模組回傳標準化 ——
 function normalizeModuleResult(result) {
-  // 物件：{ replied, autoNext, text? }
   if (result && typeof result === 'object') {
-    return {
-      replied: !!result.replied,
-      autoNext: !!result.autoNext,
-      text: result.text ?? null,
-      type: 'object'
-    };
+    return { replied: !!result.replied, autoNext: !!result.autoNext, text: result.text ?? null, type: 'object' };
   }
-  // 純文字
   if (typeof result === 'string') {
     const hasAuto = result.includes('[[AUTO_NEXT]]');
-    return {
-      replied: false,          // 由 index 回覆
-      autoNext: hasAuto,
-      text: hasAuto ? result.replace('[[AUTO_NEXT]]', '').trim() : result,
-      type: 'text'
-    };
+    return { replied: false, autoNext: hasAuto, text: result.replace('[[AUTO_NEXT]]', '').trim(), type: 'text' };
   }
-  // 其他 / 空
   return { replied: false, autoNext: false, text: null, type: 'none' };
 }
-
 function advance(session, steps = 1) {
   session.stepIndex = Math.min(session.stepIndex + steps, STEPS.length - 1);
 }
@@ -105,77 +78,46 @@ app.post('/whatsapp', async (req, res) => {
   const session = getSession(from);
   const currentStep = STEPS[session.stepIndex];
 
-  // restart / help
+  // ===== restart：直接進入第 1 步（由 name_input 發第一題；不單獨停在歡迎語） =====
   if (/^restart$/i.test(msg)) {
     session.stepIndex = 0;
-    twiml.message(welcomeText());
-    return res.type('text/xml').send(twiml.toString());
-  }
-  if (/^help$/i.test(msg)) {
-    twiml.message(helpText());
-    return res.type('text/xml').send(twiml.toString());
+    // 把歡迎語當前置提示附在第一題上（做法：先送歡迎，再立刻把第一題交給模組）
+    // 由於 Twilio 每次只能回一則訊息，這裡選擇讓模組直接回第一題，歡迎語由模組文案或後續訊息帶出
+    return handleNameInput({ req, res, from, msg: '' }); // 直接開始第 1 步
   }
 
-  // 首次進入（空訊息）顯示歡迎
+  // ===== 首次進入（空訊息、且在 step 0）也直接開始第 1 步 =====
   if (msg === '' && session.stepIndex === 0) {
-    twiml.message(welcomeText());
-    return res.type('text/xml').send(twiml.toString());
+    return handleNameInput({ req, res, from, msg: '' }); // 不停留在歡迎畫面
   }
 
-  // Step 1：name_input（完成後 autoNext -> Step 2）
+  // ===== 第 1 步：name_input（完成 autoNext->Step 2）=====
   if (currentStep.key === 'name_input') {
     const raw = await handleNameInput({ req, res, from, msg });
     const r = normalizeModuleResult(raw);
-
-    // 模組已自行回覆（常見於 name_input）
-    if (r.replied) {
-      if (r.autoNext) advance(session, 1);
-      return; // 不再由 index 回覆
-    }
-
-    // 模組回傳純文字（較少見），由 index 回
+    if (r.replied) { if (r.autoNext) advance(session, 1); return; }
     if (r.text) {
-      if (r.autoNext) {
-        advance(session, 1);
-        const nextStep = STEPS[session.stepIndex];
-        twiml.message(r.text + '\n\n' + placeholderMessage(nextStep));
-      } else {
-        twiml.message(r.text);
-      }
+      if (r.autoNext) { advance(session, 1); twiml.message(r.text + '\n\n' + placeholderMessage(STEPS[session.stepIndex])); }
+      else { twiml.message(r.text); }
       return res.type('text/xml').send(twiml.toString());
     }
-
-    // 兜底
-    twiml.message('（系統已處理你的輸入）');
-    return res.type('text/xml').send(twiml.toString());
-  }
-
-  // Step 4：history（❌ 禁 0 跳過；兼容物件與文字 + [[AUTO_NEXT]]）
-  if (currentStep.key === 'history') {
-    const raw = await handleHistory({ from, body: msg });
-    const r = normalizeModuleResult(raw);
-
-    if (r.replied) {
-      if (r.autoNext) advance(session, 1); // 4 -> 5
-      return;
-    }
-
-    if (r.text) {
-      if (r.autoNext) {
-        advance(session, 1);
-        const nextStep = STEPS[session.stepIndex];
-        twiml.message(r.text + '\n\n' + placeholderMessage(nextStep));
-      } else {
-        twiml.message(r.text);
-      }
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    // 兜底：不多發「系統已處理…」，避免干擾
     return res.status(204).end();
   }
 
-  // 其他佔位模組：0 ➝ 下一步
+  // ===== 第 4 步：history（❌ 不允許 0 跳過；看 autoNext 決定是否前進）=====
+  if (currentStep.key === 'history') {
+    const raw = await handleHistory({ from, body: msg });
+    const r = normalizeModuleResult(raw);
+    if (r.replied) { if (r.autoNext) advance(session, 1); return; }
+    if (r.text) {
+      if (r.autoNext) { advance(session, 1); twiml.message(r.text + '\n\n' + placeholderMessage(STEPS[session.stepIndex])); }
+      else { twiml.message(r.text); }
+      return res.type('text/xml').send(twiml.toString());
+    }
+    return res.status(204).end();
+  }
+
+  // ===== 其他佔位模組：0 ➝ 下一步（統一處理）=====
   if (msg === '0') {
     if (session.stepIndex < STEPS.length - 1) {
       advance(session, 1);
@@ -190,7 +132,7 @@ app.post('/whatsapp', async (req, res) => {
     }
   }
 
-  // 一般輸入 → 顯示當前步驟佔位提示
+  // 其他任何輸入 → 回當前步驟的佔位提示
   twiml.message(placeholderMessage(currentStep));
   return res.type('text/xml').send(twiml.toString());
 });
@@ -202,4 +144,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on :${PORT}`);
 });
-
