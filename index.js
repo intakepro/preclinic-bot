@@ -1,5 +1,5 @@
 // src/index.js
-// WhatsApp 問診 7 步驟 Demo（第 1 步接入 name_input；第 4 步接入病史模組）
+// WhatsApp 問診 7 步驟 Demo（第 1 步接入 ；第 4 步接入病史模組）
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -7,7 +7,7 @@ const { MessagingResponse } = require('twilio').twiml;
 const { handleNameInput } = require('./modules/name_input');
 
 // ★ 新增：病史模組 v2（先用記憶體儲存把功能跑起來）
-const { createHistoryModule } = require('./modules/history_module_v2');
+const { createHistoryModule } = require('./modules/history');
 const { handle: handleHistory } = createHistoryModule(); // 之後可換成 Firestore 版本
 
 const app = express();
