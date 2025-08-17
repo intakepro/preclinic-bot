@@ -1,17 +1,20 @@
-// File: index.js | v0.2 (Render Web Service + Twilio WhatsApp Webhook)
-// 說明：常駐 Express 伺服器；接收 Twilio WhatsApp Webhook 並依序回覆 7 個流程訊息。
-// 指令：any 時間輸入 "restart" 重新開始；"end" 結束並致謝。
+// File: index.js | v0.3 (sequential messages via Twilio REST)
+// 說明：Webhook 只觸發流程；伺服器用 Twilio REST API 依序發送每一步訊息（含歡迎語）。
+// 指令：任何時候輸入 "restart" 重新開始；"end" 立即結束並致謝。
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
+const twilio = require('twilio');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.use(bodyParser.urlencoded({ extended: false }));
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const FROM = process.env.TWILIO_WHATSAPP_FROM; // e.g. 'whatsapp:+14155238886'
+const STEP_DELAY_MS = parseInt(process.env.STEP_DELAY_MS || '800', 10);
 
-// ---- 流程與（預期）模組檔名 ----
+// --- 流程定義 ---
 const STEPS = [
   { title: '第一次權限檢查模組', file: 'modules/permission_check_first.js' },
   { title: '病人個人資料模組',   file: 'modules/patient_profile.js' },
@@ -22,18 +25,18 @@ const STEPS = [
   { title: '匯出總結模組',       file: 'modules/export_summary.js' },
 ];
 
-// ---- 嘗試呼叫外部模組；若不存在則回傳佔位訊息 ----
+// --- 最簡 Session（用電話號碼作 key；量大時改 Firestore/Redis） ---
+const sessions = new Map(); // phone -> { running: boolean, aborted: boolean }
+
 async function runStepOrPlaceholder(stepNo, step) {
   try {
     const mod = require(`./${step.file}`);
-    // 規格：外部模組若存在，回傳字串或字串陣列供訊息發送
     const result = await mod({ stepNo, stepName: step.title });
     if (Array.isArray(result)) return result;
     if (typeof result === 'string') return [result];
-  } catch (e) {
-    // 模組缺失或執行失敗，走佔位
+  } catch (_) {
+    // 模組缺失或錯誤 → 走佔位
   }
-  // 佔位訊息（不依賴外部模組）
   return [
     `=== [STEP ${stepNo}] ${step.title} ===`,
     `檔案：${step.file} | v0.1`,
@@ -41,45 +44,76 @@ async function runStepOrPlaceholder(stepNo, step) {
   ];
 }
 
-// ---- 產生整段流程訊息（歡迎語 → 7 步 → 完成） ----
-async function buildFullFlowMessages() {
-  const messages = [];
-  messages.push('你好，我喺X醫生的預先問診系統，我哋現在開始啦😊');
-  for (let i = 0; i < STEPS.length; i++) {
-    const stepMsgs = await runStepOrPlaceholder(i + 1, STEPS[i]);
-    messages.push(...stepMsgs);
-  }
-  messages.push('✅ 問診已完成，你的資料已傳送給醫生。謝謝你，祝你身體早日康復❤️');
-  return messages;
+async function send(to, body) {
+  return client.messages.create({ from: FROM, to, body });
 }
 
-// ---- Twilio WhatsApp Webhook ----
+async function runFlowSequentially(to) {
+  const s = sessions.get(to) || { running: false, aborted: false };
+  if (s.running) return; // 已在跑，避免重入
+  s.running = true; s.aborted = false;
+  sessions.set(to, s);
+
+  // 歡迎語
+  await send(to, '你好，我喺X醫生的預先問診系統，我哋現在開始啦😊');
+  await send(to, '（提示：任何時候輸入 restart 可重來；輸入 end 可結束）');
+
+  for (let i = 0; i < STEPS.length; i++) {
+    if (s.aborted) break;
+    const msgs = await runStepOrPlaceholder(i + 1, STEPS[i]);
+    for (const m of msgs) {
+      if (s.aborted) break;
+      await send(to, m);
+      await new Promise(r => setTimeout(r, STEP_DELAY_MS));
+    }
+    await new Promise(r => setTimeout(r, STEP_DELAY_MS));
+  }
+
+  if (!s.aborted) {
+    await send(to, '✅ 問診已完成，你的資料已傳送給醫生。謝謝你，祝你身體早日康復❤️');
+  }
+  s.running = false;
+}
+
+function abortFlow(to) {
+  const s = sessions.get(to);
+  if (s) s.aborted = true;
+}
+
+// --------- Webhook ----------
+app.use(bodyParser.urlencoded({ extended: false }));
+
 app.post('/whatsapp', async (req, res) => {
   const twiml = new MessagingResponse();
   const incoming = (req.body.Body || '').trim().toLowerCase();
+  const to = req.body.From; // 使用者電話號（whatsapp:+852xxxx）
+  // const ourNumber = req.body.To; // 我方發信號，可用來做路由
 
-  // 指令：end
   if (incoming === 'end') {
+    abortFlow(to);
     twiml.message('🙏 謝謝，程序完結。');
     return res.type('text/xml').send(twiml.toString());
   }
 
-  // 指令：restart（或任何其它文字：預設視為開始）
-  const msgs = await buildFullFlowMessages();
-  // 小提醒
-  msgs.unshift('（提示：任何時候輸入 restart 可重來；輸入 end 可結束）');
+  if (incoming === 'restart') {
+    abortFlow(to); // 停掉舊流程
+    twiml.message('🔄 已收到 restart，流程將重新開始。');
+    res.type('text/xml').send(twiml.toString());
+    // 重新啟動新流程（不要卡住 Webhook）
+    runFlowSequentially(to).catch(console.error);
+    return;
+  }
 
-  // Twilio 允許同一回覆內多個 <Message>，這裡逐一加入
-  msgs.forEach((m) => twiml.message(m));
-  return res.type('text/xml').send(twiml.toString());
+  // 其他任何訊息都視為「開始/繼續」
+  twiml.message('✅ 已開始流程（如需重來輸入 restart；結束輸入 end）');
+  res.type('text/xml').send(twiml.toString());
+  runFlowSequentially(to).catch(console.error);
 });
 
-// ---- 健康檢查 ----
 app.get('/', (_req, res) => {
-  res.send('OK - preclinic flow is running (index.js v0.2)');
+  res.send('OK - preclinic flow is running (index.js v0.3)');
 });
 
-// ---- 啟動伺服器 ----
 app.listen(PORT, () => {
-  console.log(`Server running on http://0.0.0.0:${PORT} (index.js v0.2)`);
+  console.log(`Server running on http://0.0.0.0:${PORT} (index.js v0.3)`);
 });
