@@ -1,17 +1,22 @@
 // src/index.js
-// WhatsApp 問診 7 步驟 Demo（第 1 步接入 ；第 4 步接入病史模組）
+// WhatsApp 問診 7 步驟 Demo（第 1 步接入 name_input；第 4 步接入病史模組）
+// ++ 加入：模組呼叫超時保護、單次回覆保險、詳細日誌
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
 const { handleNameInput } = require('./modules/name_input');
 
-// ★ 新增：病史模組 v2（先用記憶體儲存把功能跑起來）
+// 病史模組（記憶體版）
 const { createHistoryModule } = require('./modules/history');
-const { handle: handleHistory } = createHistoryModule(); // 之後可換成 Firestore 版本
+const { handle: handleHistory } = createHistoryModule();
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
+
+// ---- 可調參數 ----
+const MODULE_TIMEOUT_MS = parseInt(process.env.MODULE_TIMEOUT_MS || '8000', 10);
+const EXIT_ON_COMPLETE = (process.env.EXIT_ON_COMPLETE || 'true').toLowerCase() === 'true';
 
 // ====== 流程步驟定義（7 個）======
 const STEPS = [
@@ -26,10 +31,32 @@ const STEPS = [
 
 // 記憶體 Session：{ [fromPhone]: { stepIndex, selectedPatient? } }
 const sessions = new Map();
-
 function getSession(from) {
   if (!sessions.has(from)) sessions.set(from, { stepIndex: 0, selectedPatient: null });
   return sessions.get(from);
+}
+
+// ---- 小工具：保證只回覆一次 ----
+function respondOnce(res) {
+  let sent = false;
+  return (twiml) => {
+    if (sent) return;
+    sent = true;
+    res.type('text/xml').send(twiml.toString());
+  };
+}
+
+// ---- 小工具：模組超時保護 ----
+function withTimeout(promise, ms, onTimeoutMsg) {
+  return new Promise((resolve, reject) => {
+    const to = setTimeout(() => {
+      const err = new Error('MODULE_TIMEOUT');
+      err._timeoutMessage = onTimeoutMsg;
+      reject(err);
+    }, ms);
+    promise.then((v) => { clearTimeout(to); resolve(v); })
+           .catch((e) => { clearTimeout(to); reject(e); });
+  });
 }
 
 function placeholderMessage(step) {
@@ -63,52 +90,78 @@ function helpText() {
   ].join('\n');
 }
 
-// Webhook
+// Webhook（確保 Twilio 指向 POST /whatsapp）
 app.post('/whatsapp', async (req, res) => {
   const twiml = new MessagingResponse();
+  const send = respondOnce(res);
+
   const from = (req.body.From || '').toString();
   const msg  = (req.body.Body || '').toString().trim();
 
   const session = getSession(from);
   const currentStep = STEPS[session.stepIndex];
 
+  console.log(`[IN] from=${from} step=${currentStep.key} msg="${msg}"`);
+
   // 指令：restart / help（任何步驟有效）
   if (/^restart$/i.test(msg)) {
     session.stepIndex = 0;
     twiml.message(welcomeText());
-    return res.type('text/xml').send(twiml.toString());
+    return send(twiml);
   }
   if (/^help$/i.test(msg)) {
     twiml.message(helpText());
-    return res.type('text/xml').send(twiml.toString());
+    return send(twiml);
   }
 
-  // 第 1 步：交由 name_input 模組自行回覆
+  // 第 1 步：name_input 模組（→ 你自己的模組需「快速回傳」或「自行回覆」）
   if (currentStep.key === 'name_input') {
-    const result = await handleNameInput({
-      req, res, from, msg,
-      onComplete: ({ phone, patientId, name }) => {
-        session.selectedPatient = { phone, patientId, name };
-      },
-      advanceNext: () => { session.stepIndex = 1; } // 進到第 2 步
-    });
-    if (result && result.replied) return; // 模組已自行回覆
-    twiml.message('（系統已處理你的輸入）');
-    return res.type('text/xml').send(twiml.toString());
+    try {
+      // 用超時包住，避免無限等待
+      const result = await withTimeout(
+        Promise.resolve(handleNameInput({
+          req, res, from, msg,
+          onComplete: ({ phone, patientId, name }) => {
+            session.selectedPatient = { phone, patientId, name };
+          },
+          advanceNext: () => { session.stepIndex = 1; } // 進到第 2 步
+        })),
+        MODULE_TIMEOUT_MS,
+        '⚠️ 名字輸入模組回應逾時，請再輸入一次或稍後重試。'
+      );
+
+      // 約定：若模組已自己回覆（例如直接 res.send TwiML），回傳 { replied: true }
+      if (result && result.replied) {
+        console.log('[name_input] replied by module');
+        return; // 不可再回覆
+      }
+
+      // 否則由外層回覆一條「成功接收」的訊息（避免用戶覺得卡住）
+      console.log('[name_input] outer reply');
+      twiml.message('✅ 已收到你的輸入。請按畫面指示繼續。');
+      return send(twiml);
+
+    } catch (e) {
+      console.error('[name_input] error:', e);
+      twiml.message(e._timeoutMessage || '名字輸入模組暫時無法服務，請稍後再試 🙏');
+      return send(twiml);
+    }
   }
 
-  // ★ 第 4 步：病史模組（這裡不採用「0 前進」邏輯）
+  // ★ 第 4 步：病史模組（本步通常有多輪互動，不採「0 前進」直跳）
   if (currentStep.key === 'history') {
     try {
-      const reply = await handleHistory({ from, body: msg });
-      // 病史模組在完成時會提示「已完成，請輸入 0 進入下一步」
-      // 由你決定何時把 stepIndex 前進：這裡沿用你既有「0 前進」規則（見下）
+      const reply = await withTimeout(
+        Promise.resolve(handleHistory({ from, body: msg })), // 你的 history 模組需快速回覆字串
+        MODULE_TIMEOUT_MS,
+        '⚠️ 病史模組回應逾時，請再輸入一次或稍後重試。'
+      );
       twiml.message(reply || '（空訊息）');
-      return res.type('text/xml').send(twiml.toString());
+      return send(twiml);
     } catch (e) {
       console.error('[history] error:', e);
-      twiml.message('病史模組暫時無法服務，請稍後再試 🙏');
-      return res.type('text/xml').send(twiml.toString());
+      twiml.message(e._timeoutMessage || '病史模組暫時無法服務，請稍後再試 🙏');
+      return send(twiml);
     }
   }
 
@@ -117,17 +170,20 @@ app.post('/whatsapp', async (req, res) => {
     if (session.stepIndex < STEPS.length - 1) {
       session.stepIndex += 1;
       const nextStep = STEPS[session.stepIndex];
-      // 如果下一步就是 history，就先發一條歡迎文案
+      console.log(`[FLOW] advance to step=${nextStep.key}`);
+
       if (nextStep.key === 'history') {
         twiml.message('🩺 進入【病史】模組。\n（本步驟不支援 0 跳過，請按畫面指示回覆選項）');
-        return res.type('text/xml').send(twiml.toString());
+        return send(twiml);
       }
       twiml.message(placeholderMessage(nextStep));
-      return res.type('text/xml').send(twiml.toString());
+      return send(twiml);
     } else {
       twiml.message('✅ 問診已完成，你的資料已傳送給醫生，謝謝你，祝你身體早日康復❤️');
-      res.type('text/xml').send(twiml.toString());
-      setTimeout(() => { process.exit(0); }, 1000);
+      send(twiml);
+      if (EXIT_ON_COMPLETE) {
+        setTimeout(() => { process.exit(0); }, 1000);
+      }
       return;
     }
   }
@@ -136,12 +192,13 @@ app.post('/whatsapp', async (req, res) => {
   twiml.message(
     (msg === '' ? welcomeText() + '\n\n' : '') + placeholderMessage(currentStep)
   );
-  return res.type('text/xml').send(twiml.toString());
+  return send(twiml);
 });
 
 // 健康檢查
 app.get('/', (_req, res) => res.send('PreDoctor AI flow server running.'));
 
+// 啟動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on :${PORT}`);
