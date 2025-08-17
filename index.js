@@ -1,115 +1,84 @@
-// index.js
-// Version: v4.3.0 (stable)
-// 原則：所有回覆由 Index 統一送出；模組收到 twiml 時不可 res.send()
-// 規約：模組回傳 {wait:true} or {done:true}；autoNext:true 亦視為 done:true
+// File: index.js | v0.1
+// 說明：主流程，順序呼叫 7 個模組；支援隨時輸入 `restart` / `end`
 
-const express = require('express');
-const bodyParser = require('body-parser');
-const { MessagingResponse } = require('twilio').twiml;
+const readline = require('readline');
 
-// 你的檔名
-const { handleNameInput } = require('./modules/name_input');
-const { handleAuth } = require('./modules/auth');
-const { handleProfile } = require('./modules/profile');
-const { handleHistory } = require('./modules/history'); // 你已改名為 history.js
-const { handleInterview } = require('./modules/interview');
-const { handleAiSummar } = require('./modules/ai_summar');
-const { handleExport } = require('./modules/export');
+// --- 導入各模組 ---
+const step1 = require('./modules/permission_check_first');
+const step2 = require('./modules/patient_profile');
+const step3 = require('./modules/permission_check_second');
+const step4 = require('./modules/patient_history');
+const step5 = require('./modules/intake_questionnaire');
+const step6 = require('./modules/ai_summary');
+const step7 = require('./modules/export_summary');
 
-const app = express();
-app.use(bodyParser.urlencoded({ extended: false }));
+// --- 全域控制旗標 ---
+let shouldRestart = false;
+let shouldEnd = false;
 
-const STEPS = [
-  { id: 1, key: 'name_input', handler: handleNameInput },
-  { id: 2, key: 'auth',       handler: handleAuth },
-  { id: 3, key: 'profile',    handler: handleProfile },
-  { id: 4, key: 'history',    handler: handleHistory },
-  { id: 5, key: 'interview',  handler: handleInterview },
-  { id: 6, key: 'ai_summar',  handler: handleAiSummar },
-  { id: 7, key: 'export',     handler: handleExport },
-];
-
-// 簡單 session（建議日後換 Firestore）
-const sessions = new Map();
-function getSession(from) {
-  if (!sessions.has(from)) sessions.set(from, { step: 0 });
-  return sessions.get(from);
-}
-function setStep(from, step) { getSession(from).step = step; }
-
-const welcomeText = () => '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊';
-const finishText  = () => '✅ 問診已完成，你的資料已傳送給醫生，祝你早日康復 ❤️';
-
-function isDone(r){ return !!(r && (r.done === true || r.autoNext === true)); }
-function isWait(r){ return !!(r && r.wait === true); }
-
-async function runPipeline({ req, res, from, initialMsg = '', startStep }) {
-  // 統一用同一個 TwiML 回覆整個回合
-  const twiml = new MessagingResponse();
-  let currentMsg = initialMsg;
-
-  // 連續執行模組，直到需要等輸入
-  while (true) {
-    const sess = getSession(from);
-    const step = sess.step;
-
-    // 完成所有步驟
-    if (step < 1 || step > STEPS.length) {
-      twiml.message(finishText());
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    const cur = STEPS.find(s => s.id === step);
-    if (!cur || typeof cur.handler !== 'function') {
-      twiml.message(`⚠️ 流程錯誤：步驟 ${step} 未接線。`);
-      return res.type('text/xml').send(twiml.toString());
-    }
-
-    // ★ 關鍵：把 twiml 傳入，要求模組只 append 訊息，不可 res.send()
-    const result = await cur.handler({ req, res, from, msg: currentMsg, twiml });
-
-    // 往後自動前進時，唔再傳用戶輸入
-    currentMsg = '';
-
-    if (isDone(result)) {
-      // 完成本步 → 立即前進下一步
-      setStep(from, step + 1);
-      continue;
-    }
-
-    // 模組要等輸入（或未宣告完成）→ 停止本回合，送出目前累積的 twiml
-    // 若模組錯誤地 res.send()，此刻 headersSent 會是 true，會破壞管線
-    if (res.headersSent) return; // 模組違規自行送出，無法再補救
-    return res.type('text/xml').send(twiml.toString());
+// 建立 stdin 監聽，任何時候輸入 `restart` 或 `end` 都生效
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+rl.setPrompt('> ');
+rl.on('line', (line) => {
+  const cmd = String(line || '').trim().toLowerCase();
+  if (cmd === 'restart') {
+    console.log('🔄 收到 restart 指令：流程將從最開頭重新開始。');
+    shouldRestart = true;
+  } else if (cmd === 'end') {
+    console.log('👋 收到 end 指令：謝謝，程序完結。');
+    shouldEnd = true;
+  } else {
+    console.log('（提示：輸入 `restart` 可重來；輸入 `end` 可結束）');
   }
-}
-
-app.post('/whatsapp', async (req, res) => {
-  const from = (req.body.From || '').replace(/^whatsapp:/i, '');
-  const body = (req.body.Body || '').trim();
-  const sess = getSession(from);
-
-  // restart → 回到未開始
-  if (/^restart$/i.test(body)) setStep(from, 0);
-
-  // 初次或重置：先加歡迎語，再從 Step1 開始跑管線
-  if (sess.step === 0) {
-    setStep(from, 1);
-    // 在 pipeline 前先放入歡迎語
-    const twiml = new MessagingResponse();
-    twiml.message(welcomeText());
-    // 讓 Step1 開始 append；為確保單一出口，這裡把 twiml「交接」到 runPipeline
-    // 實作方式：把歡迎語偷偷當成上一段訊息保留，然後 runPipeline 再跑整體。
-    // 為了簡潔，我們直接用 runPipeline，並在第一個模組再發第一題即可。
-    return runPipeline({ req, res, from, initialMsg: '', startStep: 1 });
-  }
-
-  // 一般：把用戶輸入交給當前步驟，然後自動前進直至遇到需要輸入
-  return runPipeline({ req, res, from, initialMsg: body, startStep: sess.step });
+  rl.prompt();
 });
 
-// 健康檢查
-app.get('/', (_req, res) => res.send('PreDoctor flow server running. v4.3.0'));
+// 小工具：檢查是否要重啟或結束
+function checkControl() {
+  if (shouldEnd) {
+    console.log('🙏 謝謝程序完結');
+    process.exit(0);
+  }
+  if (shouldRestart) {
+    shouldRestart = false; // 清回來，避免無限重啟
+    return true;           // 呼叫端據此決定重新開始
+  }
+  return false;
+}
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on :${PORT}`));
+// 主流程
+async function runFlow() {
+  console.clear();
+  console.log('你好，我喺X醫生的預先問診系統，我哋現在開始啦😊');
+  console.log('（任何時候輸入 `restart` 立即重來；輸入 `end` 立即結束）\n');
+
+  const steps = [
+    { fn: step1, name: '第一次權限檢查模組' },
+    { fn: step2, name: '病人個人資料模組' },
+    { fn: step3, name: '第二次權限檢查模組' },
+    { fn: step4, name: '病人病史模組' },
+    { fn: step5, name: '問診系統模組' },
+    { fn: step6, name: 'AI整理模組' },
+    { fn: step7, name: '匯出總結模組' },
+  ];
+
+  for (let i = 0; i < steps.length; i++) {
+    // 每步開始先檢查控制旗標
+    if (checkControl()) return runFlow(); // 重新開始
+    const stepNo = i + 1;
+    await steps[i].fn({ stepNo, stepName: steps[i].name });
+
+    // 每步完成後再檢查一次（可能在模組顯示過程中使用者下了指令）
+    if (checkControl()) return runFlow();
+  }
+
+  console.log('\n✅ 問診已完成，你的資料已傳送給醫生。謝謝你，祝你身體早日康復❤️');
+  process.exit(0);
+}
+
+// 啟動
+rl.prompt();
+runFlow().catch((err) => {
+  console.error('流程發生錯誤：', err);
+  process.exit(1);
+});
