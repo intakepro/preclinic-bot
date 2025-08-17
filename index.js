@@ -1,12 +1,14 @@
-// index.js
-// WhatsApp 問診 7 步驟 Demo（已接入 name_input + history，支援 autoNext）
+// index.js v3.0
+// WhatsApp 問診 7 步驟 Demo
+// 已接入：name_input, history
+// 新增：統一回上一題規則 + 歡迎語 + autoNext
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
 
 const { handleNameInput } = require('./modules/name_input');
-const { handleHistory } = require('./modules/history_module'); // 你已完成的 v2
+const { handleHistory } = require('./modules/history_module');
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -36,30 +38,31 @@ function placeholderMessage(step) {
   return [
     `🔧 【${step.id}. ${step.name}】`,
     `該模組製作中，請輸入「0」跳去下一個流程。`,
-    `（未來你完成此模組後，把這裡替換為實際的函式呼叫即可）`
+    `（未來完成此模組後，把這裡替換為實際的函式呼叫即可）`
   ].join('\n');
 }
 
 function welcomeText() {
   return [
     '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊',
+    '',
     '此版本會依序呼叫 7 個模組。',
     '第 1 步已整合「輸入病人名字模組」，第 4 步已整合「病史模組」。',
     '其餘步驟暫時為佔位畫面。',
-    '（在第 1 步中，數字 0 代表「上一頁」；在第 2～7 步中，數字 0 代表「前進」。）',
-    '輸入「restart」可隨時回到第 1 步；輸入「help」查看指令。'
+    '',
+    '📌 使用指令：',
+    '  restart  ➝ 回到第 1 步',
+    '  help     ➝ 顯示步驟清單',
+    '',
+    '（在第 1 步，數字 0 代表「上一頁」；',
+    ' 在第 2～7 步的佔位模組中，數字 0 代表「前進」。）',
   ].join('\n');
 }
 
 function helpText() {
   const lines = STEPS.map(s => `  ${s.id}. ${s.name}`);
   return [
-    '📖 指令說明：',
-    '  0        ➝ 在第 1 步：回上一頁；在第 2～7 步：跳到下一個流程',
-    '  restart  ➝ 回到第 1 步',
-    '  help     ➝ 顯示此說明',
-    '',
-    '📌 流程步驟：',
+    '📖 流程步驟清單：',
     ...lines
   ].join('\n');
 }
@@ -92,7 +95,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  // Step 1：name_input
+  // Step 1：name_input（支援回上一題）
   if (currentStep.key === 'name_input') {
     const result = await handleNameInput({ req, res, from, msg });
     if (applyAutoNext(result, session, 1)) return;
@@ -101,7 +104,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  // Step 4：history（❌ 不再允許 0 跳過，交由模組決定 autoNext）
+  // Step 4：history（❌ 不允許 0 跳過）
   if (currentStep.key === 'history') {
     const result = await handleHistory({ from, body: msg });
     if (applyAutoNext(result, session, 4)) return;
@@ -110,7 +113,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(twiml.toString());
   }
 
-  // 其他步驟：仍然 0 跳過
+  // 其他佔位模組：0 ➝ 下一步
   if (msg === '0') {
     if (session.stepIndex < STEPS.length - 1) {
       session.stepIndex += 1;
@@ -125,10 +128,8 @@ app.post('/whatsapp', async (req, res) => {
     }
   }
 
-  // 一般輸入
-  twiml.message(
-    (msg === '' ? welcomeText() + '\n\n' : '') + placeholderMessage(currentStep)
-  );
+  // 一般輸入 → 顯示 placeholder
+  twiml.message(placeholderMessage(currentStep));
   return res.type('text/xml').send(twiml.toString());
 });
 
