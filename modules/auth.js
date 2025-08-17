@@ -1,38 +1,17 @@
 /**
- * Module: modules/auth.js
- * Version: v2025-08-17-01
- * Date: 2025-08-17
- * 說明：
- * - 佔位模組（Step 2：病人問診權限檢查）
- * - 輸入 z / Z 會回傳 {replied:true, autoNext:true} 讓 index 進入下一步
- * - 其他輸入則顯示佔位訊息，autoNext:false
- * - 支援 twiml 直寫模式
+ * Module: auth.js
+ * Version: v1.0.0
+ * 說明：病人問診權限檢查模組（佔位版）
  */
 
 const { MessagingResponse } = require('twilio').twiml;
 
-function reply({ twiml, res, text, autoNext = false }) {
-  if (twiml) {
-    twiml.message(text);
-    return { replied: true, autoNext };
-  }
-  const tw = new MessagingResponse();
-  tw.message(text);
-  res.type('text/xml').send(tw.toString());
-  return { replied: true, autoNext };
-}
+async function handleAuth({ req, res, from, msg }) {
+  const twiml = new MessagingResponse();
+  twiml.message('📌 這是病人問診權限檢查模組（製作中）。\n請稍候⋯⋯');
+  res.type('text/xml').send(twiml.toString());
 
-async function handleAuth({ req, res, from, msg, twiml }) {
-  const body = (msg ?? req.body?.Body ?? '').toString().trim();
-  if (/^z$/i.test(body)) {
-    return reply({ twiml, res, text: '✅ 已按 z，跳去下一步。', autoNext: true });
-  }
-  const lines = [
-    '你好，這是什麼模組？👉 Step 2：病人問診權限檢查模組',
-    '該模組製作中。',
-    '請按 z 跳去下一步。'
-  ].join('\n');
-  return reply({ twiml, res, text: lines });
+  return { replied: true, done: true };
 }
 
 module.exports = { handleAuth };
