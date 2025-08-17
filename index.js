@@ -1,23 +1,16 @@
-/**
- * index.js
- * Version: v4.0.0
- * 功能：WhatsApp 問診主流程
- * 流程：
- *   1. 顯示歡迎語
- *   2. 自動呼叫模組 1 → 7
- *   3. 各模組完成後自動返回 index
- *   4. 完成後輸出結語
- */
+// index.js
+// Version: v4.2.0
+// 目標：除非模組等待使用者輸入，否則自動前進下一步（全流程皆適用）
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
 
-// ====== 模組匯入 ======
+// === 模組匯入（依你目前檔名） ===
 const { handleNameInput } = require('./modules/name_input');
 const { handleAuth } = require('./modules/auth');
 const { handleProfile } = require('./modules/profile');
-const { handleHistory } = require('./modules/history');
+const { handleHistory } = require('./modules/history'); // 你已改名為 history.js
 const { handleInterview } = require('./modules/interview');
 const { handleAiSummar } = require('./modules/ai_summar');
 const { handleExport } = require('./modules/export');
@@ -25,7 +18,7 @@ const { handleExport } = require('./modules/export');
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ====== 流程步驟定義 ======
+// === 流程定義 ===
 const STEPS = [
   { id: 1, key: 'name_input', handler: handleNameInput },
   { id: 2, key: 'auth',       handler: handleAuth },
@@ -36,90 +29,102 @@ const STEPS = [
   { id: 7, key: 'export',     handler: handleExport },
 ];
 
-// ====== 記憶體 Session ======
-// 線上建議換成 Firestore
-const sessions = {};
-
-// ====== 主流程控制 ======
+// === Session（記憶體；之後可換 Firestore）===
+const sessions = new Map();
 function getSession(phone) {
-  if (!sessions[phone]) {
-    sessions[phone] = { step: 0 }; // step=0 → 還沒開始
-  }
-  return sessions[phone];
+  if (!sessions.has(phone)) sessions.set(phone, { step: 0 });
+  return sessions.get(phone);
+}
+function setStep(phone, step) { getSession(phone).step = step; }
+
+// === UI ===
+const welcomeText = () => '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊';
+const finishText  = () => '✅ 問診已完成，你的資料已傳送給醫生，祝你早日康復 ❤️';
+
+// === 判斷結果：done=可前進；wait=需等待輸入 ===
+// 模組建議回傳：
+//  - { replied:true, done:true }     → 已處理且可前進
+//  - { replied:true, wait:true }     → 已處理但要等使用者
+// 相容舊旗標 autoNext:true 視同 done:true
+function isDone(result) {
+  return !!(result && (result.done === true || result.autoNext === true));
+}
+function isWait(result) {
+  return !!(result && result.wait === true);
 }
 
-function setSessionStep(phone, step) {
-  if (!sessions[phone]) sessions[phone] = {};
-  sessions[phone].step = step;
-}
+// === 取得步驟 ===
+function getStepObj(i) { return STEPS.find(s => s.id === i) || null; }
 
-// ====== WhatsApp Webhook ======
-app.post('/whatsapp', async (req, res) => {
-  const from = (req.body.From || '').replace('whatsapp:', '');
-  const msg = (req.body.Body || '').trim();
+// === Pipeline：在同一 webhook 內連續執行，直到遇到需要輸入的模組 ===
+async function runPipeline({ req, res, from, initialMsg = '', startStep, twiml }) {
+  setStep(from, startStep);
+  let currentMsg = initialMsg;
 
-  const twiml = new MessagingResponse();
+  while (true) {
+    const sess = getSession(from);
+    const step = sess.step;
 
-  let session = getSession(from);
-
-  // 初始狀態 → 顯示歡迎語，並自動進入模組 1
-  if (session.step === 0) {
-    twiml.message('👋 歡迎使用 XX醫生問診系統，我哋而家開始啦⋯⋯😊');
-    res.type('text/xml').send(twiml.toString());
-    setSessionStep(from, 1); // 下一個請求會跑到模組 1
-    return;
-  }
-
-  // 已在流程中 → 執行當前模組
-  const step = session.step;
-  const current = STEPS.find(s => s.id === step);
-
-  if (!current) {
-    twiml.message('⚠️ 系統錯誤：流程不存在。');
-    res.type('text/xml').send(twiml.toString());
-    return;
-  }
-
-  try {
-    const result = await current.handler({
-      req,
-      res,
-      from,
-      msg,
-      onComplete: () => {}, // 可用於回傳資料
-      advanceNext: () => {
-        // 模組完成 → 自動進入下一步
-        const nextStep = step + 1;
-        if (nextStep <= STEPS.length) {
-          setSessionStep(from, nextStep);
-        } else {
-          setSessionStep(from, -1); // 結束
-        }
-      }
-    });
-
-    // 如果模組完成（done=true），直接切到下一步
-    if (result && result.done) {
-      const nextStep = step + 1;
-      if (nextStep <= STEPS.length) {
-        setSessionStep(from, nextStep);
-      } else {
-        setSessionStep(from, -1);
-        const endTwiml = new MessagingResponse();
-        endTwiml.message('✅ 問診已完成，祝你早日康復！');
-        res.type('text/xml').send(endTwiml.toString());
-      }
+    // 全部完成
+    if (step < 1 || step > STEPS.length) {
+      const t = twiml || new MessagingResponse();
+      t.message(finishText());
+      return res.type('text/xml').send(t.toString());
     }
 
-  } catch (err) {
-    console.error('[index] error:', err);
-    twiml.message('系統發生錯誤，請稍後再試。');
-    res.type('text/xml').send(twiml.toString());
+    const cur = getStepObj(step);
+    if (!cur || typeof cur.handler !== 'function') {
+      const t = twiml || new MessagingResponse();
+      t.message(`⚠️ 流程錯誤：步驟 ${step} 未接線。`);
+      return res.type('text/xml').send(t.toString());
+    }
+
+    // 呼叫目前模組（若傳入 twiml，模組應直接把訊息 append 到同一 TwiML）
+    const result = await cur.handler({ req, res, from, msg: currentMsg, twiml });
+
+    // 之後的自動前進不再把使用者輸入傳遞下去
+    currentMsg = '';
+
+    if (isDone(result)) {
+      // 立即前進下一步（不等使用者）
+      setStep(from, step + 1);
+      continue; // 繼續 while，嘗試下一個模組
+    }
+
+    // 若模組需要等待輸入（或沒有回 done），就停止 pipeline
+    // - twiml 存在 → 這個迴合統一由 index 送出
+    // - twiml 不存在 → 一般由模組已經 res.send()；若沒有則 204
+    if (twiml) return res.type('text/xml').send(twiml.toString());
+    if (!res.headersSent) return res.status(204).end();
+    return;
   }
+}
+
+// === Webhook ===
+app.post('/whatsapp', async (req, res) => {
+  const from = (req.body.From || '').replace(/^whatsapp:/i, '');
+  const body = (req.body.Body || '').trim();
+  const sess = getSession(from);
+
+  // restart → 回到未開始
+  if (/^restart$/i.test(body)) {
+    setStep(from, 0);
+  }
+
+  // 初次或重置：同回合送「歡迎 + 模組1第一題」，然後流水線自動跑下去直到遇到等待輸入的模組
+  if (sess.step === 0) {
+    const twiml = new MessagingResponse();
+    twiml.message(welcomeText());
+    return runPipeline({ req, res, from, initialMsg: '', startStep: 1, twiml });
+  }
+
+  // 一般：把使用者輸入交給當前步驟，然後繼續自動前進直到遇到要等輸入的模組
+  return runPipeline({ req, res, from, initialMsg: body, startStep: sess.step, twiml: null });
 });
 
-// ====== 啟動 ======
+// 健康檢查
+app.get('/', (_req, res) => res.send('PreDoctor flow server running. v4.2.0'));
+
+// 啟動
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on :${PORT}`));
