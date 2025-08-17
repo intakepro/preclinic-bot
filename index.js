@@ -1,11 +1,12 @@
 // index.js
-// WhatsApp 問診 7 步驟 Demo（第 1 步已接入 name_input 模組）
+// WhatsApp 問診 7 步驟 Demo（已接入 name_input + history，支援 autoNext）
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const { MessagingResponse } = require('twilio').twiml;
+
 const { handleNameInput } = require('./modules/name_input');
-const { handleHistory } = require('./modules/history_module'); // 新增病史模組
+const { handleHistory } = require('./modules/history_module'); // 你已完成的 v2
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -39,14 +40,12 @@ function placeholderMessage(step) {
   ].join('\n');
 }
 
-// 👇 修改：首次歡迎語
 function welcomeText() {
   return [
     '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊',
-    '',
     '此版本會依序呼叫 7 個模組。',
-    '第 1 步已整合「輸入病人名字模組」。',
-    '第 2～7 步目前仍為佔位畫面。',
+    '第 1 步已整合「輸入病人名字模組」，第 4 步已整合「病史模組」。',
+    '其餘步驟暫時為佔位畫面。',
     '（在第 1 步中，數字 0 代表「上一頁」；在第 2～7 步中，數字 0 代表「前進」。）',
     '輸入「restart」可隨時回到第 1 步；輸入「help」查看指令。'
   ].join('\n');
@@ -56,14 +55,21 @@ function helpText() {
   const lines = STEPS.map(s => `  ${s.id}. ${s.name}`);
   return [
     '📖 指令說明：',
-    '  0        ➝ 在第 1 步：回上一頁；在第 2～3、5～7 步：跳到下一個流程',
-    '  9        ➝ 在第 4 步（病史模組）：完成後跳去下一步',
+    '  0        ➝ 在第 1 步：回上一頁；在第 2～7 步：跳到下一個流程',
     '  restart  ➝ 回到第 1 步',
     '  help     ➝ 顯示此說明',
     '',
     '📌 流程步驟：',
     ...lines
   ].join('\n');
+}
+
+// ====== 自動前進 helper ======
+function applyAutoNext(result, session, nextIndex) {
+  if (result && result.autoNext === true) {
+    session.stepIndex = nextIndex;
+  }
+  return result && result.replied;
 }
 
 // Webhook
@@ -75,65 +81,36 @@ app.post('/whatsapp', async (req, res) => {
   const session = getSession(from);
   const currentStep = STEPS[session.stepIndex];
 
-  // 指令：restart / help（任何步驟有效）
+  // restart / help
   if (/^restart$/i.test(msg)) {
     session.stepIndex = 0;
     twiml.message(welcomeText());
-    res.type('text/xml').send(twiml.toString());
-    return;
+    return res.type('text/xml').send(twiml.toString());
   }
   if (/^help$/i.test(msg)) {
     twiml.message(helpText());
-    res.type('text/xml').send(twiml.toString());
-    return;
+    return res.type('text/xml').send(twiml.toString());
   }
 
-  // 第 1 步：改由模組處理
+  // Step 1：name_input
   if (currentStep.key === 'name_input') {
-    const result = await handleNameInput({
-      req, res,
-      from,
-      msg,
-      onComplete: ({ phone, patientId, name }) => {
-        session.selectedPatient = { phone, patientId, name };
-      },
-      advanceNext: () => {
-        session.stepIndex = 1; // 下一步
-      }
-    });
-    if (result && result.replied) return; // 模組已回覆
+    const result = await handleNameInput({ req, res, from, msg });
+    if (applyAutoNext(result, session, 1)) return;
+    if (result && result.replied) return;
     twiml.message('（系統已處理你的輸入）');
     return res.type('text/xml').send(twiml.toString());
   }
 
-  // ★ 第 4 步：病史模組（專屬用 9 前進）
+  // Step 4：history（❌ 不再允許 0 跳過，交由模組決定 autoNext）
   if (currentStep.key === 'history') {
-    if (msg === '9') {
-      if (session.stepIndex < STEPS.length - 1) {
-        session.stepIndex += 1;
-        const nextStep = STEPS[session.stepIndex];
-        twiml.message(placeholderMessage(nextStep));
-        return res.type('text/xml').send(twiml.toString());
-      } else {
-        twiml.message('✅ 問診已完成，你的資料已傳送給醫生，謝謝你，祝你身體早日康復❤️');
-        res.type('text/xml').send(twiml.toString());
-        setTimeout(() => { process.exit(0); }, 1000);
-        return;
-      }
-    }
-
-    try {
-      const reply = await handleHistory({ from, body: msg });
-      twiml.message(reply || '（空訊息）');
-      return res.type('text/xml').send(twiml.toString());
-    } catch (e) {
-      console.error('[history] error:', e);
-      twiml.message('病史模組暫時無法服務，請稍後再試 🙏');
-      return res.type('text/xml').send(twiml.toString());
-    }
+    const result = await handleHistory({ from, body: msg });
+    if (applyAutoNext(result, session, 4)) return;
+    if (result && result.replied) return;
+    twiml.message('（系統已處理你的輸入）');
+    return res.type('text/xml').send(twiml.toString());
   }
 
-  // 第 2、3、5～7 步：維持原本 0 前進
+  // 其他步驟：仍然 0 跳過
   if (msg === '0') {
     if (session.stepIndex < STEPS.length - 1) {
       session.stepIndex += 1;
@@ -141,14 +118,14 @@ app.post('/whatsapp', async (req, res) => {
       twiml.message(placeholderMessage(nextStep));
       return res.type('text/xml').send(twiml.toString());
     } else {
-      twiml.message('✅ 問診已完成，你的資料已傳送給醫生，謝謝你，祝你身體早日康復❤️');
+      twiml.message('✅ 問診已完成，你的資料已傳送給醫生，祝你早日康復 ❤️');
       res.type('text/xml').send(twiml.toString());
-      setTimeout(() => { process.exit(0); }, 1000);
+      setTimeout(() => process.exit(0), 1000);
       return;
     }
   }
 
-  // 其他輸入：回覆佔位
+  // 一般輸入
   twiml.message(
     (msg === '' ? welcomeText() + '\n\n' : '') + placeholderMessage(currentStep)
   );
