@@ -1,11 +1,18 @@
-// modules/name_input.js
-// WhatsApp「輸入病人名字」模組（Firestore）
-// 功能：帳號=電話；每帳號最多 8 人；0 回上一頁；滿額→顯示刪除名單；選定或新增後顯示個人資料並回傳完成訊號
+/**
+ * Module: modules/name_input.js
+ * Version: v2025-08-17-02
+ * Date: 2025-08-17
+ * 變更摘要：
+ * - 統一回傳 { replied, autoNext }，完成時 autoNext:true，與 index.js 的 autoNext 流程對接
+ * - 每一道問題均支援「回上一項」：輸入 0 / prev / ←
+ * - 除非等待使用者輸入，否則完成即自動跳下一步（選現有病人 / 新增完成）
+ * - 文案加入「回上一項」提示
+ */
 
 const { MessagingResponse } = require('twilio').twiml;
 const admin = require('firebase-admin');
 
-// --- Firebase 初始化（只初始化一次） ---
+// -------- Firebase 初始化（只初始化一次） --------
 let _initialized = false;
 function ensureFirebase() {
   if (_initialized) return;
@@ -26,7 +33,7 @@ function ensureFirebase() {
 }
 function db() { ensureFirebase(); return admin.firestore(); }
 
-// --- Firestore I/O ---
+// -------- Firestore I/O --------
 async function ensureAccount(phone) {
   const userRef = db().collection('users').doc(phone);
   const s = await userRef.get();
@@ -57,7 +64,7 @@ async function deletePatient(phone, patientId) {
   await db().collection('users').doc(phone).collection('patients').doc(patientId).delete();
 }
 
-// --- Session in Firestore（只給本模組使用） ---
+// -------- Session in Firestore（只給本模組使用） --------
 async function getFSSession(phone) {
   const ref = db().collection('sessions').doc(phone);
   const snap = await ref.get();
@@ -84,7 +91,7 @@ async function saveFSSession(session) {
   await db().collection('sessions').doc(session.phone).set(session, { merge: true });
 }
 
-// --- 驗證 & UI ---
+// -------- 驗證 & UI --------
 function isValidGender(t) { return t === '男' || t === '女'; }
 function isValidDateYYYYMMDD(t) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false;
@@ -96,13 +103,15 @@ function isValidDateYYYYMMDD(t) {
          y >= 1900 && y <= 2100;
 }
 function isValidId(t) { return typeof t === 'string' && t.trim().length >= 4; }
-function isBackKey(t) { return (t || '').trim() === '0'; }
+function isBackKey(t) {
+  const v = (t || '').trim().toLowerCase();
+  return v === '0' || v === 'prev' || v === '←';
+}
 
 function renderMenu(patients, firstTime = false) {
   const lines = [];
   if (firstTime || patients.length === 0) {
-    lines.push('👋 歡迎使用預先問診系統。此電話尚未有病人資料。');
-    lines.push('請先新增個人資料（依序：姓名→性別→出生日期→身份證號）。');
+    lines.push('此電話尚未有病人資料。請先新增個人資料（依序：姓名→性別→出生日期→身份證號）。');
     lines.push('');
     lines.push('回覆「1」開始新增。');
     return lines.join('\n');
@@ -111,15 +120,15 @@ function renderMenu(patients, firstTime = false) {
   patients.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`));
   lines.push(`${patients.length + 1}. ➕ 新增病人`);
   lines.push('');
-  lines.push('請回覆編號（例如：1）。');
+  lines.push('請回覆編號（例如：1）。（回上一項：輸入 0 / prev / ←）');
   return lines.join('\n');
 }
 function renderDeleteMenu(patients) {
   const lines = [];
-  lines.push('📦 使用者最多可儲存 8 人資料。請選擇要刪除的一位：');
+  lines.push('📦 已達最多 8 人限制時，請先刪除一位：');
   patients.forEach((p, i) => lines.push(`${i + 1}. ${p.name}`));
   lines.push('');
-  lines.push('回覆對應編號刪除，或輸入 **0** 返回上一頁。');
+  lines.push('回覆對應編號刪除；回上一項：輸入 0 / prev / ←');
   return lines.join('\n');
 }
 function renderProfile(p) {
@@ -132,20 +141,20 @@ function renderProfile(p) {
   ].join('\n');
 }
 
-// --- 匯出：主處理器 ---
+// -------- 主處理器 --------
 // args: { req, res, from, msg, onComplete({ phone, patientId, name }), advanceNext() }
 async function handleNameInput(args) {
   const { req, res, from, msg, onComplete, advanceNext } = args;
   const twiml = new MessagingResponse();
 
-  const rawFrom = from || (req.body.From ?? req.body.FromNumber ?? '').toString();
+  const rawFrom = from || (req.body?.From ?? req.body?.FromNumber ?? '').toString();
   const phone = rawFrom.replace(/^whatsapp:/i, '').trim();
-  const body  = (msg ?? req.body.Body ?? '').toString().trim();
+  const body  = (msg ?? req.body?.Body ?? '').toString().trim();
 
   if (!phone) {
     twiml.message('系統未能識別你的電話號碼，請透過 WhatsApp 連結重新進入。');
     res.type('text/xml').send(twiml.toString());
-    return { replied: true, advance: false };
+    return { replied: true, autoNext: false };
   }
 
   try {
@@ -160,41 +169,45 @@ async function handleNameInput(args) {
         session.state = 'ADD_NAME';
         session.temp = {};
         await saveFSSession(session);
-        twiml.message('首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
+        twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（回上一項：輸入 0 / prev / ←）');
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false }; // 等用戶輸入
       } else {
         session.state = 'MENU';
         await saveFSSession(session);
         twiml.message(renderMenu(patients));
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false }; // 等用戶選擇
       }
     }
 
     switch (session.state) {
       case 'MENU': {
+        if (isBackKey(body)) {
+          // MENU 已是第一層，回上一項=維持在 MENU
+          twiml.message(renderMenu(patients, patients.length === 0));
+          res.type('text/xml').send(twiml.toString());
+          return { replied: true, autoNext: false };
+        }
         const n = Number(body);
         if (patients.length === 0) {
           session.state = 'ADD_NAME';
           session.temp = {};
           await saveFSSession(session);
-          twiml.message('首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
+          twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（回上一項：輸入 0 / prev / ←）');
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
         if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
           if (n <= patients.length) {
             const chosen = patients[n - 1];
-            // 回傳給主流程：完成
             if (typeof onComplete === 'function') {
               onComplete({ phone, patientId: chosen.id, name: chosen.name });
             }
-            // 顯示個資 + 提示已選取，讓主流程將步驟前進到第 2 步
             twiml.message(`${renderProfile(chosen)}\n\n✅ 已選擇此病人，將進入下一步。`);
             res.type('text/xml').send(twiml.toString());
             if (typeof advanceNext === 'function') advanceNext();
-            return { replied: true, advance: true };
+            return { replied: true, autoNext: true }; // ✅ 自動下一步
           }
           // 新增
           if (n === patients.length + 1) {
@@ -203,20 +216,20 @@ async function handleNameInput(args) {
               await saveFSSession(session);
               twiml.message('⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients));
               res.type('text/xml').send(twiml.toString());
-              return { replied: true, advance: false };
+              return { replied: true, autoNext: false };
             }
             session.state = 'ADD_NAME';
             session.temp = {};
             await saveFSSession(session);
-            twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
+            twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（回上一項：輸入 0 / prev / ←）');
             res.type('text/xml').send(twiml.toString());
-            return { replied: true, advance: false };
+            return { replied: true, autoNext: false };
           }
         }
         await saveFSSession(session);
         twiml.message(renderMenu(patients));
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false };
       }
 
       case 'ADD_NAME': {
@@ -225,67 +238,67 @@ async function handleNameInput(args) {
           await saveFSSession(session);
           twiml.message(renderMenu(patients, patients.length === 0));
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
         if (!body) {
-          twiml.message('請輸入有效的姓名（身份證姓名）。\n（輸入 0 回上一頁）');
+          twiml.message('請輸入有效的姓名（身份證姓名）。\n（回上一項：輸入 0 / prev / ←）');
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
         session.temp.name = body;
         session.state = 'ADD_GENDER';
         await saveFSSession(session);
-        twiml.message('2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 回上一頁）');
+        twiml.message('2️⃣ 請輸入性別（回覆「男」或「女」）。\n（回上一項：輸入 0 / prev / ←）');
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false };
       }
 
       case 'ADD_GENDER': {
         if (isBackKey(body)) {
           session.state = 'ADD_NAME';
           await saveFSSession(session);
-          twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
+          twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（回上一項：輸入 0 / prev / ←）');
         } else if (!isValidGender(body)) {
-          twiml.message('格式不正確。請回覆「男」或「女」。\n（輸入 0 回上一頁）');
+          twiml.message('格式不正確。請回覆「男」或「女」。\n（回上一項：輸入 0 / prev / ←）');
         } else {
           session.temp.gender = body;
           session.state = 'ADD_DOB';
           await saveFSSession(session);
-          twiml.message('3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 回上一頁）');
+          twiml.message('3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（回上一項：輸入 0 / prev / ←）');
         }
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false };
       }
 
       case 'ADD_DOB': {
         if (isBackKey(body)) {
           session.state = 'ADD_GENDER';
           await saveFSSession(session);
-          twiml.message('2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 回上一頁）');
+          twiml.message('2️⃣ 請輸入性別（回覆「男」或「女」）。\n（回上一項：輸入 0 / prev / ←）');
         } else if (!isValidDateYYYYMMDD(body)) {
-          twiml.message('出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（輸入 0 回上一頁）');
+          twiml.message('出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（回上一項：輸入 0 / prev / ←）');
         } else {
           session.temp.birthDate = body;
           session.state = 'ADD_ID';
           await saveFSSession(session);
-          twiml.message('4️⃣ 請輸入身份證號碼：\n（輸入 0 回上一頁）');
+          twiml.message('4️⃣ 請輸入身份證號碼：\n（回上一項：輸入 0 / prev / ←）');
         }
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false };
       }
 
       case 'ADD_ID': {
         if (isBackKey(body)) {
           session.state = 'ADD_DOB';
           await saveFSSession(session);
-          twiml.message('3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 回上一頁）');
+          twiml.message('3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（回上一項：輸入 0 / prev / ←）');
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
         if (!isValidId(body)) {
-          twiml.message('身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（輸入 0 回上一頁）');
+          twiml.message('身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（回上一項：輸入 0 / prev / ←）');
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
 
         // 寫入（避免競態先確認名額）
@@ -295,7 +308,7 @@ async function handleNameInput(args) {
           await saveFSSession(session);
           twiml.message('⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients));
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
 
         session.temp.idNumber = body;
@@ -312,8 +325,8 @@ async function handleNameInput(args) {
         }
         twiml.message(`💾 已儲存。\n\n${renderProfile(created)}\n\n✅ 已選擇此病人，將進入下一步。`);
         res.type('text/xml').send(twiml.toString());
-        if (typeof advanceNext === 'function') advanceNext();
-        return { replied: true, advance: true };
+        if (typeof advanceNext === 'function') advanceNext(); // 兼容舊版
+        return { replied: true, autoNext: true };             // ✅ 自動下一步
       }
 
       case 'DELETE_MENU': {
@@ -322,7 +335,7 @@ async function handleNameInput(args) {
           await saveFSSession(session);
           twiml.message(renderMenu(patients));
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false };
         }
         const n = Number(body);
         if (Number.isInteger(n) && n >= 1 && n <= patients.length) {
@@ -333,11 +346,11 @@ async function handleNameInput(args) {
           const after = await listPatients(phone);
           twiml.message(`🗑️ 已刪除：${target.name}\n\n${renderMenu(after)}`);
           res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return { replied: true, autoNext: false }; // 刪除後仍需選擇，不自動跳下一模組
         }
         twiml.message(renderDeleteMenu(patients));
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false };
       }
 
       default: {
@@ -345,16 +358,16 @@ async function handleNameInput(args) {
         await saveFSSession(session);
         twiml.message(renderMenu(patients, patients.length === 0));
         res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return { replied: true, autoNext: false };
       }
     }
   } catch (err) {
     console.error('[name_input] error:', err && err.stack ? err.stack : err);
-    twiml.message('系統暫時忙碌，請稍後再試。');
-    res.type('text/xml').send(twiml.toString());
-    return { replied: true, advance: false };
+    const twiml2 = new MessagingResponse();
+    twiml2.message('系統暫時忙碌，請稍後再試。');
+    res.type('text/xml').send(twiml2.toString());
+    return { replied: true, autoNext: false };
   }
 }
 
 module.exports = { handleNameInput };
-
