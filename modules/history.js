@@ -1,366 +1,430 @@
-/**
- * File: modules/history.js
- * Version: v6.2.0-fs-composite
- * Interface: async handleHistory({ msg, from, patientId, patientName }) -> { text, done }
- *
- * 特性：
- * - 以複合鍵（phone__patientId）存 history 與 history_sessions，確保每位病人唯一。
- * - 所有訊息頂部顯示「病人：<name>（<phone末4>）」。
- * - DONE 畫面支援：1＝重新修改、z＝完成（回傳 done:true 讓 index 進下一步）。
- */
-
-'use strict';
+// modules/history.js
+// File: modules/history.js
+// Version: v6.2.0-fs-composite
+//
+// 功能重點：
+// 1) 當使用者於 name_input 選擇病人後，如該病人已有病史：
+//    - 顯示「病人姓名＋電話末四碼」在頂部
+//    - 列出病史摘要
+//    - 詢問：「是否要更改？還是下一步？」（1=更改，2=下一步）
+// 2) 若選擇更改，提供分項編輯選單：過去病史/現用藥/過敏/社會史（吸菸/飲酒/旅遊）
+// 3) 若選擇下一步，回傳 done: true 讓 index.js 進入下一模組
+//
+// Firestore 結構：
+// patients/{phone}: {
+//   name: String,
+//   phone: String,
+//   history: {
+//     pmh: [String], // 過去病史
+//     meds: [String], // 現用藥
+//     allergies: { types: [String], items: [String] },
+//     social: { smoking: String, alcohol: String, travel: String }
+//   },
+//   updatedAt: Timestamp
+// }
+//
+// sessions/{from}: {
+//   state: String,           // e.g. 'history:await_decision', 'history:menu', 'history:edit_pmh'...
+//   patient: { name, phone } // 建議由 name_input 模組寫入
+//   buffer: any              // 編輯暫存
+//   module: 'history'        // 目前所在模組標記（可選）
+// }
+//
+// 介面：createHistoryModule({ db }) -> { handle }
+// 使用：
+// const { createHistoryModule } = require('./modules/history');
+// const { handle: handleHistory } = createHistoryModule(); // 若專案已初始化 admin，參數可省略
+//
+// 在 index.js 裡：
+// const result = await handleHistory({ from, body });
+// if (result.done) { // 進入下一步 }
 
 const admin = require('firebase-admin');
 
-// --- Firebase ---
-(function ensureFirebase() {
-  if (admin.apps.length) return;
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({ credential: admin.credential.cert(sa) });
-      console.log('[history] Firebase via FIREBASE_SERVICE_ACCOUNT');
-    } else {
-      admin.initializeApp();
-      console.log('[history] Firebase via default credentials');
-    }
-  } catch (e) {
-    console.error('[history] Firebase init error:', e?.message || e);
-    throw e;
-  }
-})();
+// 僅初始化一次（整個專案可多檔共用）
+if (!admin.apps.length) {
+  // 建議用 GOOGLE_APPLICATION_CREDENTIALS 或應用預設認證
+  admin.initializeApp();
+}
+
 const db = admin.firestore();
-const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
-const STATES = {
-  ENTRY: 'H_ENTRY',
-  SHOW_EXISTING: 'H_SHOW',
-  FIRST_NOTICE: 'H_FIRST',
-  PMH_SELECT: 'H_PMH',
-  PMH_OTHER_INPUT: 'H_PMH_OTHER',
-  MEDS_YN: 'H_MEDS_YN',
-  MEDS_INPUT: 'H_MEDS_IN',
-  ALLERGY_YN: 'H_ALG_YN',
-  ALLERGY_TYPE: 'H_ALG_T',
-  ALLERGY_INPUT: 'H_ALG_IN',
-  SOCIAL_SMOKE: 'H_SOC_SMK',
-  SOCIAL_ALCOHOL: 'H_SOC_ALC',
-  SOCIAL_TRAVEL: 'H_SOC_TRV',
-  REVIEW: 'H_REVIEW',
-  DONE: 'H_DONE'
+// ---- 工具函式 ---------------------------------------------------------
+const last4 = (phone) => {
+  if (!phone) return '****';
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.slice(-4).padStart(4, '*');
 };
 
-const PMH_OPTIONS = ['高血壓','糖尿病','心臟病','腎臟病','肝病','中風','癌症','其他','無'];
-const YES = '1', NO = '2';
+const fmtList = (arr) => {
+  if (!Array.isArray(arr) || arr.length === 0) return '（無）';
+  return arr.map((v, i) => `  • ${v}`).join('\n');
+};
 
-const phoneKey = (from) =>
-  (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
-const last4 = (phone) => (phone || '').replace(/\D/g,'').slice(-4) || '----';
-const isZ = (v='') => /^z$/i.test(v.trim());
-const isOne = (v='') => v.trim() === '1';
-const isYesNo = (v) => v === YES || v === NO;
+const fmtText = (s) => (s && String(s).trim() ? String(s).trim() : '（無）');
 
-const header = (name, phone) => `【病人：${name || '未命名'}（${last4(phone)}）】`;
+const banner = (name, phone) =>
+  `👤 病人：${name || '（未命名）'}（${last4(phone)}）`;
 
-function initHistory(){
-  return { pmh: [], meds: [], allergies: { types: [], items: [] }, social: { smoking:'', alcohol:'', travel:'' } };
-}
-function renderPMHMenu(){
-  return '請選擇您曾經患有的疾病（可複選，用逗號分隔數字）：\n' +
-    PMH_OPTIONS.map((t,i)=>`${i+1}️⃣ ${t}`).join('\n');
-}
-function commaNumListToIndices(text) {
-  return String(text || '')
-    .replace(/，/g, ',')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(n => parseInt(n, 10))
-    .filter(n => !Number.isNaN(n));
-}
-function renderSummary(h){
-  const pmh      = h.pmh?.length ? h.pmh.join('、') : '無';
-  const meds     = h.meds?.length ? h.meds.join('、') : '無';
-  const alTypes  = h.allergies?.types?.length ? h.allergies.types.join('、') : '無';
-  const alItems  = h.allergies?.items?.length ? h.allergies.items.join('、') : '無';
-  const smoking  = h.social?.smoking || '未填';
-  const alcohol  = h.social?.alcohol || '未填';
-  const travel   = h.social?.travel  || '未填';
+const renderHistorySummary = (history = {}) => {
+  const pmh = fmtList(history.pmh);
+  const meds = fmtList(history.meds);
+  const allergiesTypes = fmtList((history.allergies && history.allergies.types) || []);
+  const allergiesItems = fmtList((history.allergies && history.allergies.items) || []);
+  const smoking = fmtText(history.social?.smoking);
+  const alcohol = fmtText(history.social?.alcohol);
+  const travel  = fmtText(history.social?.travel);
+
   return [
-    `- 過去病史：${pmh}`,
-    `- 服用藥物：${meds}`,
-    `- 過敏類型：${alTypes}`,
-    `- 過敏明細：${alItems}`,
-    `- 吸菸：${smoking}；飲酒：${alcohol}；近期出國：${travel}`
+    '📋 病史摘要：',
+    '',
+    '— 過去病史（PMH）—',
+    pmh,
+    '',
+    '— 現用藥（Meds）—',
+    meds,
+    '',
+    '— 過敏（Allergies）—',
+    `  類型：\n${allergiesTypes}`,
+    `  明細：\n${allergiesItems}`,
+    '',
+    '— 社會史（Social）—',
+    `  吸菸：${smoking}`,
+    `  飲酒：${alcohol}`,
+    `  旅遊：${travel}`,
   ].join('\n');
-}
-function reviewText(h, name, phone){
-  return `${header(name, phone)}\n感謝您提供病史資料 🙏\n以下是您剛填寫的內容：\n${renderSummary(h)}\n\n請問需要更改嗎？\n1️⃣ 需要更改\nz️⃣ 進入下一步`;
-}
-
-// --- Firestore I/O（用複合鍵）---
-function keyOf(phone, patientId){ return `${phone}__${patientId}`; }
-async function getSession(historyKey){
-  const ref = db.collection('history_sessions').doc(historyKey);
-  const s = await ref.get();
-  if (s.exists) return s.data();
-  const fresh = { state: STATES.ENTRY, buffer: {}, updatedAt: nowTS() };
-  await ref.set(fresh);
-  return fresh;
-}
-async function saveSession(historyKey, patch){
-  await db.collection('history_sessions').doc(historyKey)
-    .set({ ...patch, updatedAt: nowTS() }, { merge: true });
-}
-async function getHistory(historyKey){
-  const ref = db.collection('history').doc(historyKey);
-  const s = await ref.get();
-  return s.exists ? (s.data()?.history || null) : null;
-}
-async function saveHistory(historyKey, historyObj){
-  await db.collection('history').doc(historyKey)
-    .set({ history: historyObj, updatedAt: nowTS() }, { merge: true });
-}
-
-// --- 主處理器 ---
-module.exports.handleHistory = async function handleHistory({ msg, from, patientId, patientName }) {
-  const phone = phoneKey(from);
-  const body  = (msg || '').trim();
-
-  if (!patientId) {
-    return { text: '⚠️ 未取得病人代號（patientId）。請回到第 1 步選擇病人後再試。', done: false };
-  }
-
-  const hKey = keyOf(phone, patientId);
-  let session = await getSession(hKey);
-  let history = await getHistory(hKey);
-
-  // 入口
-  if (session.state === STATES.ENTRY) {
-    if (history) {
-      session.state = STATES.SHOW_EXISTING;
-      await saveSession(hKey, { state: session.state });
-      return {
-        text:
-`${header(patientName, phone)}
-👉 第 4 步：讀取病人病史模組
-
-已找到你之前輸入的病史資料：
-${renderSummary(history)}
-
-是否需要更改？
-1️⃣ 需要更改
-z️⃣ 進入下一步`,
-        done: false
-      };
-    }
-    session.state = STATES.FIRST_NOTICE;
-    await saveSession(hKey, { state: session.state });
-    return {
-      text:
-`${header(patientName, phone)}
-👉 第 4 步：讀取病人病史模組
-
-首次使用此病人資料，我們會收集基本病史（約 2–3 分鐘）。
-
-請按 z 開始。`,
-      done: false
-    };
-  }
-
-  // 舊資料確認
-  if (session.state === STATES.SHOW_EXISTING) {
-    if (isOne(body)) {
-      session.state = STATES.PMH_SELECT;
-      session.buffer = { history: initHistory() };
-      await saveSession(hKey, { state: session.state, buffer: session.buffer });
-      return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
-    }
-    if (isZ(body)) {
-      session.state = STATES.DONE;
-      await saveSession(hKey, { state: session.state });
-      return { text: `${header(patientName, phone)}\n✅ 病史已確認無需更改，將進入下一步。`, done: true };
-    }
-    return { text: `${header(patientName, phone)}\n請回覆：1＝需要更改，或 z＝進入下一步。`, done: false };
-  }
-
-  // 首次說明 → 開始
-  if (session.state === STATES.FIRST_NOTICE) {
-    if (!isZ(body)) return { text: `${header(patientName, phone)}\n請按 z 開始。`, done: false };
-    session.state = STATES.PMH_SELECT;
-    session.buffer = { history: initHistory() };
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
-  }
-
-  // PMH
-  if (session.state === STATES.PMH_SELECT) {
-    const idxs = commaNumListToIndices(body);
-    if (!idxs.length || !idxs.every(n=>n>=1 && n<=PMH_OPTIONS.length)) {
-      return { text: `${header(patientName, phone)}\n格式不正確，請用逗號分隔數字，例如：1,2 或 1,3,7\n\n${renderPMHMenu()}`, done: false };
-    }
-    const names = [];
-    let needOther = false, isNone = false;
-    for (const n of idxs) {
-      if (n === 8) needOther = true;
-      if (n === 9) isNone = true;
-      names.push(PMH_OPTIONS[n-1]);
-    }
-    if (isNone) session.buffer.history.pmh = [];
-    else session.buffer.history.pmh = names.filter(x => x!=='其他' && x!=='無');
-
-    if (needOther && !isNone) {
-      session.state = STATES.PMH_OTHER_INPUT;
-      await saveSession(hKey, { state: session.state, buffer: session.buffer });
-      return { text: `${header(patientName, phone)}\n請輸入「其他」的具體病名（可多個，以逗號或頓號分隔）`, done: false };
-    }
-    session.state = STATES.MEDS_YN;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有`, done: false };
-  }
-
-  if (session.state === STATES.PMH_OTHER_INPUT) {
-    const extra = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    session.buffer.history.pmh.push(...extra);
-    session.state = STATES.MEDS_YN;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有`, done: false };
-  }
-
-  // 用藥
-  if (session.state === STATES.MEDS_YN) {
-    if (!isYesNo(body)) return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有 或 2️⃣ 沒有`, done: false };
-    if (body === YES) {
-      session.state = STATES.MEDS_INPUT;
-      await saveSession(hKey, { state: session.state, buffer: session.buffer });
-      return { text: `${header(patientName, phone)}\n請輸入正在服用的藥物名稱（可多個，以逗號或頓號分隔）`, done: false };
-    }
-    session.buffer.history.meds = [];
-    session.state = STATES.ALLERGY_YN;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無`, done: false };
-  }
-
-  if (session.state === STATES.MEDS_INPUT) {
-    const meds = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    session.buffer.history.meds = meds;
-    session.state = STATES.ALLERGY_YN;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無`, done: false };
-  }
-
-  // 過敏
-  if (session.state === STATES.ALLERGY_YN) {
-    if (!isYesNo(body)) return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有 或 2️⃣ 無`, done: false };
-    if (body === YES) {
-      session.state = STATES.ALLERGY_TYPE;
-      session.buffer.history.allergies = { types: [], items: [] };
-      await saveSession(hKey, { state: session.state, buffer: session.buffer });
-      return { text: `${header(patientName, phone)}\n過敏類型（可複選，用逗號分隔）：\n1️⃣ 藥物\n2️⃣ 食物\n3️⃣ 其他`, done: false };
-    }
-    session.buffer.history.allergies = { types: [], items: [] };
-    session.state = STATES.SOCIAL_SMOKE;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n（若已戒可輸入：已戒）`, done: false };
-  }
-
-  if (session.state === STATES.ALLERGY_TYPE) {
-    const idxs = commaNumListToIndices(body);
-    if (!idxs.length || !idxs.every(n=>n>=1 && n<=3)) {
-      return { text: `${header(patientName, phone)}\n請以逗號分隔數字，例如：1,2（1=藥物 2=食物 3=其他）`, done: false };
-    }
-    const map = {1:'藥物',2:'食物',3:'其他'};
-    session.buffer.history.allergies.types = [...new Set(idxs.map(n=>map[n]))];
-    session.state = STATES.ALLERGY_INPUT;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n請輸入過敏項目（例如：青黴素、花生…；可多個，用逗號或頓號分隔）`, done: false };
-  }
-
-  if (session.state === STATES.ALLERGY_INPUT) {
-    const items = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    session.buffer.history.allergies.items = items;
-    session.state = STATES.SOCIAL_SMOKE;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n（若已戒可輸入：已戒）`, done: false };
-  }
-
-  // 社會史
-  if (session.state === STATES.SOCIAL_SMOKE) {
-    const v = body.trim();
-    let smoking='';
-    if (v===YES) smoking='有';
-    else if (v===NO) smoking='無';
-    else if (v==='已戒') smoking='已戒';
-    else return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有、2️⃣ 無，或輸入「已戒」`, done: false };
-    session.buffer.history.social.smoking = smoking;
-    session.state = STATES.SOCIAL_ALCOHOL;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n飲酒情況：\n1️⃣ 每天\n2️⃣ 偶爾\n（若不喝請輸入：無）`, done: false };
-  }
-
-  if (session.state === STATES.SOCIAL_ALCOHOL) {
-    const v = body.trim();
-    let alcohol='';
-    if (v===YES) alcohol='每天';
-    else if (v===NO) alcohol='偶爾';
-    else if (v==='無') alcohol='無';
-    else return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 每天、2️⃣ 偶爾，或輸入「無」`, done: false };
-    session.buffer.history.social.alcohol = alcohol;
-    session.state = STATES.SOCIAL_TRAVEL;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: `${header(patientName, phone)}\n最近三個月是否出國旅行？\n1️⃣ 有\n2️⃣ 無`, done: false };
-  }
-
-  if (session.state === STATES.SOCIAL_TRAVEL) {
-    if (!isYesNo(body)) return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有 或 2️⃣ 無`, done: false };
-    session.buffer.history.social.travel = (body===YES)?'有':'無';
-
-    const latest = session.buffer.history;
-    await saveHistory(hKey, latest);
-
-    session.state = STATES.REVIEW;
-    await saveSession(hKey, { state: session.state, buffer: session.buffer });
-    return { text: reviewText(latest, patientName, phone), done: false };
-  }
-
-  // REVIEW
-  if (session.state === STATES.REVIEW) {
-    if (isOne(body)) {
-      session.state = STATES.PMH_SELECT;
-      session.buffer = { history: initHistory() };
-      await saveSession(hKey, { state: session.state, buffer: session.buffer });
-      return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
-    }
-    if (isZ(body)) {
-      session.state = STATES.DONE;
-      await saveSession(hKey, { state: session.state });
-      return { text: `${header(patientName, phone)}\n✅ 已儲存最新病史，將進入下一個模組。`, done: true };
-    }
-    return { text: `${header(patientName, phone)}\n請回覆：1＝需要更改，或 z＝進入下一步。`, done: false };
-  }
-
-  // DONE（支援 1 / z）
-  if (session.state === STATES.DONE) {
-    const t = body.toLowerCase();
-    if (t === '1') {
-      session.state  = STATES.PMH_SELECT;
-      session.buffer = { history: initHistory() };
-      await saveSession(hKey, { state: session.state, buffer: session.buffer });
-      return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
-    }
-    if (t === 'z') {
-      return { text: `${header(patientName, phone)}\n✅ 病史模組已完成，進入下一步。`, done: true };
-    }
-    return {
-      text: `${header(patientName, phone)}\n（提示）病史模組已完成。\n如需更改請回覆 1；否則按 z 進入下一步。`,
-      done: false
-    };
-  }
-
-  // 兜底
-  session.state = STATES.ENTRY;
-  session.buffer = {};
-  await saveSession(hKey, { state: session.state, buffer: session.buffer });
-  return { text: `${header(patientName, phone)}\n已重置病史模組，請重新開始。`, done: false };
 };
+
+const decisionPrompt =
+  '是否要更改病史？\n' +
+  '1️⃣ 更改\n' +
+  '2️⃣ 下一步（保持不變）\n' +
+  '（請輸入 1 或 2）';
+
+const editMenuText =
+  '請選擇要更改的項目：\n' +
+  '1️⃣ 過去病史（PMH）\n' +
+  '2️⃣ 現用藥（Meds）\n' +
+  '3️⃣ 過敏（Allergies）\n' +
+  '4️⃣ 社會史（Social）\n' +
+  '0️⃣ 返回上一層選單';
+
+const allergiesMenuText =
+  '過敏（Allergies）要更改哪一項？\n' +
+  '1️⃣ 類型（types，例：藥物/食物/環境）\n' +
+  '2️⃣ 明細（items，例：阿莫西林、花生）\n' +
+  '0️⃣ 返回上一層';
+
+const socialMenuText =
+  '社會史（Social）要更改哪一項？\n' +
+  '1️⃣ 吸菸（smoking）\n' +
+  '2️⃣ 飲酒（alcohol）\n' +
+  '3️⃣ 旅遊（travel）\n' +
+  '0️⃣ 返回上一層';
+
+// 將逗號、頓號、換行分割成陣列（去除空白）
+const toArray = (text) =>
+  String(text || '')
+    .split(/[,，、\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+// ---- Firestore 讀寫 ----------------------------------------------------
+async function readSession(from) {
+  const ref = db.collection('sessions').doc(from);
+  const snap = await ref.get();
+  return snap.exists ? snap.data() : {};
+}
+
+async function writeSession(from, data) {
+  const ref = db.collection('sessions').doc(from);
+  await ref.set(data, { merge: true });
+}
+
+async function readPatientByPhone(phone) {
+  if (!phone) return null;
+  const ref = db.collection('patients').doc(phone);
+  const snap = await ref.get();
+  return snap.exists ? snap.data() : null;
+}
+
+async function upsertPatientHistory(phone, partialHistory) {
+  const ref = db.collection('patients').doc(phone);
+  await ref.set(
+    {
+      phone,
+      history: partialHistory ? admin.firestore.FieldValue.delete() : {},
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  // 需再 merge 寫入 history（避免刪除整個節點）
+  if (partialHistory) {
+    await ref.set({ history: partialHistory, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  }
+}
+
+// ---- 主流程 ------------------------------------------------------------
+function createHistoryModule(/* { db } 可擴充 */) {
+  return {
+    /**
+     * handle({ from, body })
+     * - from：WhatsApp 來話（電話字串）
+     * - body：使用者輸入文字
+     * 回傳：
+     * { message, done?: boolean }
+     *  - 若 done 為 true：index.js 可進入下一模組
+     */
+    handle: async ({ from, body }) => {
+      const text = String(body || '').trim();
+      const session = await readSession(from);
+
+      // 取得目前病人（建議由 name_input 寫入 sessions.{from}.patient）
+      const patient = session.patient || null;
+      if (!patient?.phone) {
+        await writeSession(from, { state: 'history:await_patient', module: 'history' });
+        return {
+          message:
+            '（系統）尚未取得病人資訊。\n請先在「輸入病人名字」步驟選擇病人後再進入本模組。',
+        };
+      }
+
+      const patientDoc = await readPatientByPhone(patient.phone);
+      const hasHistory =
+        patientDoc &&
+        patientDoc.history &&
+        (Array.isArray(patientDoc.history.pmh) ||
+          Array.isArray(patientDoc.history.meds) ||
+          (patientDoc.history.allergies &&
+            (Array.isArray(patientDoc.history.allergies.types) ||
+             Array.isArray(patientDoc.history.allergies.items))) ||
+          (patientDoc.history.social &&
+            (patientDoc.history.social.smoking ||
+             patientDoc.history.social.alcohol ||
+             patientDoc.history.social.travel)));
+
+      // --- 進入點：若尚未進入任何子狀態，根據是否有病史來決定顯示 ---
+      if (!session.state || !String(session.state).startsWith('history:')) {
+        if (hasHistory) {
+          const summary = renderHistorySummary(patientDoc.history || {});
+          await writeSession(from, { state: 'history:await_decision', module: 'history' });
+          return {
+            message:
+              `${banner(patientDoc.name || patient.name, patient.phone)}\n\n` +
+              summary + '\n\n' +
+              decisionPrompt,
+          };
+        } else {
+          // 沒有病史，直接引導建立（從 PMH 開始）
+          await writeSession(from, { state: 'history:edit_pmh:await_input', module: 'history', buffer: {} });
+          return {
+            message:
+              `${banner(patientDoc?.name || patient.name, patient.phone)}\n` +
+              '尚未建立病史，先從「過去病史（PMH）」開始。\n' +
+              '請輸入過去病史，多項以「，」、「、」或換行分隔。\n' +
+              '（例如：高血壓、糖尿病、痛風）',
+          };
+        }
+      }
+
+      // --- 狀態機處理 ---
+      const state = session.state;
+
+      // 1) 決策：更改 or 下一步
+      if (state === 'history:await_decision') {
+        if (text === '1') {
+          await writeSession(from, { state: 'history:menu', module: 'history' });
+          return { message: editMenuText };
+        }
+        if (text === '2') {
+          // 下一步：結束模組
+          await writeSession(from, { state: 'idle', module: null });
+          return { message: '✅ 已保持病史不變，進入下一步。', done: true };
+        }
+        return { message: '請輸入 1（更改）或 2（下一步）。' };
+      }
+
+      // 2) 主選單
+      if (state === 'history:menu') {
+        if (text === '1') {
+          await writeSession(from, { state: 'history:edit_pmh:await_input', buffer: {} });
+          return { message: '請輸入「過去病史（PMH）」清單，多項可用逗號或換行分隔。' };
+        }
+        if (text === '2') {
+          await writeSession(from, { state: 'history:edit_meds:await_input', buffer: {} });
+          return { message: '請輸入「現用藥（Meds）」清單，多項可用逗號或換行分隔。' };
+        }
+        if (text === '3') {
+          await writeSession(from, { state: 'history:edit_allergies:menu', buffer: {} });
+          return { message: allergiesMenuText };
+        }
+        if (text === '4') {
+          await writeSession(from, { state: 'history:edit_social:menu', buffer: {} });
+          return { message: socialMenuText };
+        }
+        if (text === '0') {
+          // 返回上一層（若你有上一模組，可在 index 接到此訊息時回退）
+          await writeSession(from, { state: 'history:await_decision' });
+          return { message: decisionPrompt };
+        }
+        return { message: '請輸入 1/2/3/4 或 0 返回。' };
+      }
+
+      // 3) PMH 編輯
+      if (state === 'history:edit_pmh:await_input') {
+        const pmh = toArray(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.pmh = pmh;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:menu', buffer: null });
+        return {
+          message:
+            '✅ 已更新「過去病史（PMH）」\n' +
+            fmtList(pmh) +
+            '\n\n' +
+            editMenuText,
+        };
+      }
+
+      // 4) Meds 編輯
+      if (state === 'history:edit_meds:await_input') {
+        const meds = toArray(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.meds = meds;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:menu', buffer: null });
+        return {
+          message:
+            '✅ 已更新「現用藥（Meds）」\n' +
+            fmtList(meds) +
+            '\n\n' +
+            editMenuText,
+        };
+      }
+
+      // 5) Allergies 編輯選單
+      if (state === 'history:edit_allergies:menu') {
+        if (text === '1') {
+          await writeSession(from, { state: 'history:edit_allergies_types:await_input' });
+          return { message: '請輸入「過敏類型（types）」清單，例如：藥物、食物、環境。' };
+        }
+        if (text === '2') {
+          await writeSession(from, { state: 'history:edit_allergies_items:await_input' });
+          return { message: '請輸入「過敏明細（items）」清單，例如：阿莫西林、花生、塵蟎。' };
+        }
+        if (text === '0') {
+          await writeSession(from, { state: 'history:menu' });
+          return { message: editMenuText };
+        }
+        return { message: '請輸入 1/2 或 0 返回。' };
+      }
+
+      if (state === 'history:edit_allergies_types:await_input') {
+        const types = toArray(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.allergies = history.allergies || {};
+        history.allergies.types = types;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:edit_allergies:menu' });
+        return {
+          message:
+            '✅ 已更新「過敏類型（types）」\n' +
+            fmtList(types) +
+            '\n\n' +
+            allergiesMenuText,
+        };
+      }
+
+      if (state === 'history:edit_allergies_items:await_input') {
+        const items = toArray(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.allergies = history.allergies || {};
+        history.allergies.items = items;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:edit_allergies:menu' });
+        return {
+          message:
+            '✅ 已更新「過敏明細（items）」\n' +
+            fmtList(items) +
+            '\n\n' +
+            allergiesMenuText,
+        };
+      }
+
+      // 6) Social 編輯選單
+      if (state === 'history:edit_social:menu') {
+        if (text === '1') {
+          await writeSession(from, { state: 'history:edit_social_smoking:await_input' });
+          return { message: '請輸入吸菸情形（例如：不吸菸／已戒菸／每日半包）。' };
+        }
+        if (text === '2') {
+          await writeSession(from, { state: 'history:edit_social_alcohol:await_input' });
+          return { message: '請輸入飲酒情形（例如：不飲酒／偶爾小酌／每週 2 次）。' };
+        }
+        if (text === '3') {
+          await writeSession(from, { state: 'history:edit_social_travel:await_input' });
+          return { message: '請輸入近期旅遊史（例如：無／上月赴日本 5 天）。' };
+        }
+        if (text === '0') {
+          await writeSession(from, { state: 'history:menu' });
+          return { message: editMenuText };
+        }
+        return { message: '請輸入 1/2/3 或 0 返回。' };
+      }
+
+      if (state === 'history:edit_social_smoking:await_input') {
+        const val = fmtText(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.social = history.social || {};
+        history.social.smoking = val;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:edit_social:menu' });
+        return {
+          message:
+            `✅ 已更新「吸菸」：${val}\n\n` +
+            socialMenuText,
+        };
+      }
+
+      if (state === 'history:edit_social_alcohol:await_input') {
+        const val = fmtText(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.social = history.social || {};
+        history.social.alcohol = val;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:edit_social:menu' });
+        return {
+          message:
+            `✅ 已更新「飲酒」：${val}\n\n` +
+            socialMenuText,
+        };
+      }
+
+      if (state === 'history:edit_social_travel:await_input') {
+        const val = fmtText(text);
+        const existing = (await readPatientByPhone(patient.phone)) || { name: patient.name, phone: patient.phone, history: {} };
+        const history = existing.history || {};
+        history.social = history.social || {};
+        history.social.travel = val;
+        await upsertPatientHistory(patient.phone, history);
+        await writeSession(from, { state: 'history:edit_social:menu' });
+        return {
+          message:
+            `✅ 已更新「旅遊」：${val}\n\n` +
+            socialMenuText,
+        };
+      }
+
+      // 預設回覆：維持在當前狀態
+      return { message: '未能識別指令，請依畫面提示輸入對應數字或內容。' };
+    },
+  };
+}
+
+module.exports = { createHistoryModule };
