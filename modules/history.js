@@ -1,11 +1,12 @@
 /**
  * File: modules/history.js
- * Version: v6.2.1-fs-composite
+ * Version: v6.2.0-fs-composite
  * Interface: async handleHistory({ msg, from, patientId, patientName }) -> { text, done }
  *
- * 更新內容：
- * - 保持 ENTRY→SHOW_EXISTING 時列出「病人名稱 + 電話末4」與完整病史摘要，並提供 1/z 選項。
- * - DONE 狀態不靜默：持續提供 1（更改）/ z（完成）以免用戶誤會已卡住。
+ * 特性：
+ * - 以複合鍵（phone__patientId）存 history 與 history_sessions，確保每位病人唯一。
+ * - 所有訊息頂部顯示「病人：<name>（<phone末4>）」。
+ * - DONE 畫面支援：1＝重新修改、z＝完成（回傳 done:true 讓 index 進下一步）。
  */
 
 'use strict';
@@ -184,7 +185,145 @@ z️⃣ 進入下一步`,
     return { text: `${header(patientName, phone)}\n請回覆：1＝需要更改，或 z＝進入下一步。`, done: false };
   }
 
-  // ……（中間填寫流程與你 v6.2.0 相同，略）……
+  // 首次說明 → 開始
+  if (session.state === STATES.FIRST_NOTICE) {
+    if (!isZ(body)) return { text: `${header(patientName, phone)}\n請按 z 開始。`, done: false };
+    session.state = STATES.PMH_SELECT;
+    session.buffer = { history: initHistory() };
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
+  }
+
+  // PMH
+  if (session.state === STATES.PMH_SELECT) {
+    const idxs = commaNumListToIndices(body);
+    if (!idxs.length || !idxs.every(n=>n>=1 && n<=PMH_OPTIONS.length)) {
+      return { text: `${header(patientName, phone)}\n格式不正確，請用逗號分隔數字，例如：1,2 或 1,3,7\n\n${renderPMHMenu()}`, done: false };
+    }
+    const names = [];
+    let needOther = false, isNone = false;
+    for (const n of idxs) {
+      if (n === 8) needOther = true;
+      if (n === 9) isNone = true;
+      names.push(PMH_OPTIONS[n-1]);
+    }
+    if (isNone) session.buffer.history.pmh = [];
+    else session.buffer.history.pmh = names.filter(x => x!=='其他' && x!=='無');
+
+    if (needOther && !isNone) {
+      session.state = STATES.PMH_OTHER_INPUT;
+      await saveSession(hKey, { state: session.state, buffer: session.buffer });
+      return { text: `${header(patientName, phone)}\n請輸入「其他」的具體病名（可多個，以逗號或頓號分隔）`, done: false };
+    }
+    session.state = STATES.MEDS_YN;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有`, done: false };
+  }
+
+  if (session.state === STATES.PMH_OTHER_INPUT) {
+    const extra = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
+    session.buffer.history.pmh.push(...extra);
+    session.state = STATES.MEDS_YN;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有`, done: false };
+  }
+
+  // 用藥
+  if (session.state === STATES.MEDS_YN) {
+    if (!isYesNo(body)) return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有 或 2️⃣ 沒有`, done: false };
+    if (body === YES) {
+      session.state = STATES.MEDS_INPUT;
+      await saveSession(hKey, { state: session.state, buffer: session.buffer });
+      return { text: `${header(patientName, phone)}\n請輸入正在服用的藥物名稱（可多個，以逗號或頓號分隔）`, done: false };
+    }
+    session.buffer.history.meds = [];
+    session.state = STATES.ALLERGY_YN;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無`, done: false };
+  }
+
+  if (session.state === STATES.MEDS_INPUT) {
+    const meds = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
+    session.buffer.history.meds = meds;
+    session.state = STATES.ALLERGY_YN;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無`, done: false };
+  }
+
+  // 過敏
+  if (session.state === STATES.ALLERGY_YN) {
+    if (!isYesNo(body)) return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有 或 2️⃣ 無`, done: false };
+    if (body === YES) {
+      session.state = STATES.ALLERGY_TYPE;
+      session.buffer.history.allergies = { types: [], items: [] };
+      await saveSession(hKey, { state: session.state, buffer: session.buffer });
+      return { text: `${header(patientName, phone)}\n過敏類型（可複選，用逗號分隔）：\n1️⃣ 藥物\n2️⃣ 食物\n3️⃣ 其他`, done: false };
+    }
+    session.buffer.history.allergies = { types: [], items: [] };
+    session.state = STATES.SOCIAL_SMOKE;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n（若已戒可輸入：已戒）`, done: false };
+  }
+
+  if (session.state === STATES.ALLERGY_TYPE) {
+    const idxs = commaNumListToIndices(body);
+    if (!idxs.length || !idxs.every(n=>n>=1 && n<=3)) {
+      return { text: `${header(patientName, phone)}\n請以逗號分隔數字，例如：1,2（1=藥物 2=食物 3=其他）`, done: false };
+    }
+    const map = {1:'藥物',2:'食物',3:'其他'};
+    session.buffer.history.allergies.types = [...new Set(idxs.map(n=>map[n]))];
+    session.state = STATES.ALLERGY_INPUT;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n請輸入過敏項目（例如：青黴素、花生…；可多個，用逗號或頓號分隔）`, done: false };
+  }
+
+  if (session.state === STATES.ALLERGY_INPUT) {
+    const items = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
+    session.buffer.history.allergies.items = items;
+    session.state = STATES.SOCIAL_SMOKE;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n（若已戒可輸入：已戒）`, done: false };
+  }
+
+  // 社會史
+  if (session.state === STATES.SOCIAL_SMOKE) {
+    const v = body.trim();
+    let smoking='';
+    if (v===YES) smoking='有';
+    else if (v===NO) smoking='無';
+    else if (v==='已戒') smoking='已戒';
+    else return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有、2️⃣ 無，或輸入「已戒」`, done: false };
+    session.buffer.history.social.smoking = smoking;
+    session.state = STATES.SOCIAL_ALCOHOL;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n飲酒情況：\n1️⃣ 每天\n2️⃣ 偶爾\n（若不喝請輸入：無）`, done: false };
+  }
+
+  if (session.state === STATES.SOCIAL_ALCOHOL) {
+    const v = body.trim();
+    let alcohol='';
+    if (v===YES) alcohol='每天';
+    else if (v===NO) alcohol='偶爾';
+    else if (v==='無') alcohol='無';
+    else return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 每天、2️⃣ 偶爾，或輸入「無」`, done: false };
+    session.buffer.history.social.alcohol = alcohol;
+    session.state = STATES.SOCIAL_TRAVEL;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: `${header(patientName, phone)}\n最近三個月是否出國旅行？\n1️⃣ 有\n2️⃣ 無`, done: false };
+  }
+
+  if (session.state === STATES.SOCIAL_TRAVEL) {
+    if (!isYesNo(body)) return { text: `${header(patientName, phone)}\n請輸入 1️⃣ 有 或 2️⃣ 無`, done: false };
+    session.buffer.history.social.travel = (body===YES)?'有':'無';
+
+    const latest = session.buffer.history;
+    await saveHistory(hKey, latest);
+
+    session.state = STATES.REVIEW;
+    await saveSession(hKey, { state: session.state, buffer: session.buffer });
+    return { text: reviewText(latest, patientName, phone), done: false };
+  }
+
   // REVIEW
   if (session.state === STATES.REVIEW) {
     if (isOne(body)) {
@@ -201,7 +340,7 @@ z️⃣ 進入下一步`,
     return { text: `${header(patientName, phone)}\n請回覆：1＝需要更改，或 z＝進入下一步。`, done: false };
   }
 
-  // DONE（不靜默）
+  // DONE（支援 1 / z）
   if (session.state === STATES.DONE) {
     const t = body.toLowerCase();
     if (t === '1') {
