@@ -1,11 +1,9 @@
 // index.js
-// Version: v6.4.4-fs
+// Version: v6.4.5-fs
 // 變更重點：
-// - 歡迎語（step=0）與流程分離：只有在 step=0 收到 'z' 才會開始第 1 步。
-// - 修正「按 z 後直接跳到第二步」：在歡迎畫面起始時，無論第 1 步 handler 回傳什麼，當回合都不自動前進，只回覆第 1 步文本。
-// - 任何時刻訊息包含「我想做預先問診」或 restart：重置為 step=0、清掉 selectedPatient，回歡迎語（不自動進第 1 步）。
-// - 完成全部步驟後 step=-1（靜默）；直到再收到「我想做預先問診」或 restart 才重置回歡迎語。
-// - 加入 DEBUG 日誌：每次執行前後都會輸出目前 step、模組 key、done 狀態。
+// - 移除 index 端的「第 X 步（製作中）」佔位訊息；完全由模組輸出決定。
+// - 若模組沒有回文字，index 不多回任何訊息（HTTP 204）。
+// - 其餘行為維持 v6.4.4-fs：z 開始、restart/「我想做預先問診」重設、完成後 step=-1 靜默。
 
 'use strict';
 
@@ -34,11 +32,11 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
-// ===== 載入模組（與你現有版本相容）=====
-const { handleNameInput } = require('./modules/name_input');   // 建議 v6.0.1-fs
+// ===== 載入模組 =====
+const { handleNameInput } = require('./modules/name_input');
 const { handleAuth }      = require('./modules/auth');
 const { handleProfile }   = require('./modules/profile');
-const { handleHistory }   = require('./modules/history');      // 建議 v6.2.1-fs-composite
+const { handleHistory }   = require('./modules/history');
 const { handleInterview } = require('./modules/interview');
 const { handleAiSummar }  = require('./modules/ai_summar');
 const { handleExport }    = require('./modules/export');
@@ -54,11 +52,11 @@ const STEPS = [
   { id: 7, key: 'export',     name: '匯出總結模組',          handler: handleExport },
 ];
 
-// ===== App & 中介 =====
+// ===== App =====
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ===== Session 工具 =====
+// ===== Session 工具（Firestore）=====
 const phoneOf = (from) =>
   (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
 
@@ -83,9 +81,7 @@ async function getStep(from) {
   const s = Number(data.step ?? 0);
   return s === -1 ? -1 : Math.max(0, Math.min(s, STEPS.length));
 }
-async function setStep(from, step) {
-  await setSession(from, { step });
-}
+async function setStep(from, step) { await setSession(from, { step }); }
 async function clearSelectedPatient(from) {
   await setSession(from, { selectedPatient: admin.firestore.FieldValue.delete() });
 }
@@ -99,39 +95,41 @@ const finishText  = () =>
 const containsStartPhrase = (s='') => /我想做預先問診/i.test(s);
 const isZ = (s='') => s.trim().toLowerCase() === 'z';
 
-// ===== 執行單一步驟（history 會帶 selectedPatient）=====
+// ===== 執行單一步驟 =====
 async function runStep(stepId, { msg, from }) {
   const def = STEPS.find(s => s.id === stepId);
   if (!def || typeof def.handler !== 'function') {
-    console.log(`[DEBUG] runStep(${stepId}) 未接線，回佔位`);
-    return { text: `👉 第 ${stepId} 步（未接線），請按 z 繼續。`, done: false };
+    console.log(`[DEBUG] runStep(${stepId}) 未接線 handler`);
+    return { text: null, done: false };
   }
 
   try {
     console.log(`[DEBUG] runStep(${stepId}) -> ${def.key} 觸發，msg="${msg}"`);
+
+    // history 需要 selectedPatient
     if (def.key === 'history') {
       const { data } = await getSession(from);
       const sel = data.selectedPatient || {};
       const patientId   = sel.patientId || '';
       const patientName = sel.name || '';
       if (!patientId || !patientName) {
-        console.log('[DEBUG] history 缺少 selectedPatient，回提示');
+        console.log('[DEBUG] history 缺少 selectedPatient');
         return {
-          text: '⚠️ 尚未選定病人，請回到第 1 步選擇或新增病人後再試。\n（輸入「我想做預先問診」或 restart 回到歡迎畫面）',
+          text: '⚠️ 尚未選定病人，請先於第 1 步選擇或新增病人。\n（輸入「我想做預先問診」或 restart 回到歡迎畫面）',
           done: false
         };
       }
       const r = await def.handler({ msg, from, patientId, patientName }) || {};
       console.log(`[DEBUG] runStep(${stepId}) <- done=${!!r.done}`);
-      return { text: r.text || `👉 第 ${stepId} 步（製作中）`, done: !!r.done };
+      return { text: r.text ?? null, done: !!r.done };
     }
 
     const r = await def.handler({ msg, from }) || {};
     console.log(`[DEBUG] runStep(${stepId}) <- done=${!!r.done}`);
-    return { text: r.text || `👉 第 ${stepId} 步（製作中）`, done: !!r.done };
+    return { text: r.text ?? null, done: !!r.done };
   } catch (e) {
     console.error(`[index] step ${stepId} error:`, e?.stack || e);
-    return { text: `⚠️ 第 ${stepId} 步發生錯誤，請稍後再試或輸入「我想做預先問診」或 restart 回到歡迎畫面。`, done: false };
+    return { text: `⚠️ 第 ${stepId} 步發生錯誤，請稍後再試或輸入「我想做預先問診」/restart 重設。`, done: false };
   }
 }
 
@@ -141,7 +139,7 @@ app.post('/whatsapp', async (req, res) => {
   const body = (req.body.Body || '').toString().trim();
   let step = await getStep(from);
 
-  // A. 任何時刻：包含『我想做預先問診』或 restart -> 重置為 step=0，清除已選病人，回歡迎語（不自動進 Step1）
+  // A) 任何時刻：啟動詞或 restart -> 重設到歡迎
   if (containsStartPhrase(body) || /^restart$/i.test(body)) {
     await clearSelectedPatient(from);
     await setStep(from, 0);
@@ -151,30 +149,31 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(tw.toString());
   }
 
-  // B. 全部完成（step = -1）：保持靜默（等待再輸入啟動詞）
+  // B) 完成後靜默
   if (step === -1) {
-    console.log('[DEBUG] step=-1 (DONE)，靜默');
+    console.log('[DEBUG] step=-1 (DONE) 靜默中');
     return res.status(204).end();
   }
 
-  // C. 歡迎畫面（step = 0）：只有 z 能開始第 1 步；首次起步不自動前進
+  // C) 歡迎畫面
   if (step === 0) {
     const tw = new MessagingResponse();
     if (isZ(body)) {
       await setStep(from, 1);
-      console.log('[DEBUG] WELCOME -> 接到 z，設定 step=1，觸發第 1 步（不自動前進）');
+      console.log('[DEBUG] WELCOME -> z，設定 step=1，觸發第一步（不自動前進）');
       const r1 = await runStep(1, { msg: '', from });
-      // 不管 r1.done 是真或假，這一回合都只回覆第 1 步文本，不前進
-      tw.message(r1.text);
-      return res.type('text/xml').send(tw.toString());
-    } else {
-      console.log('[DEBUG] WELCOME 非 z，重覆歡迎語');
-      tw.message(welcomeText());
-      return res.type('text/xml').send(tw.toString());
+      if (r1.text) {
+        tw.message(r1.text);
+        return res.type('text/xml').send(tw.toString());
+      }
+      return res.status(204).end();
     }
+    console.log('[DEBUG] WELCOME 非 z，重覆歡迎語');
+    tw.message(welcomeText());
+    return res.type('text/xml').send(tw.toString());
   }
 
-  // D. 超範圍保險：視為完成
+  // D) 超範圍保險：視為完成
   if (step > STEPS.length) {
     await setStep(from, -1);
     const tw = new MessagingResponse();
@@ -182,15 +181,17 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(tw.toString());
   }
 
-  // E. 正常流程：把輸入交給當前步驟
-  console.log(`[DEBUG] 當前 step=${step}，準備執行 ${STEPS.find(s=>s.id===step)?.key}`);
+  // E) 正常流程：把輸入交給當前步驟
+  console.log(`[DEBUG] 當前 step=${step}，執行 ${STEPS.find(s=>s.id===step)?.key}`);
   const curr = await runStep(step, { msg: body, from });
-  const tw = new MessagingResponse();
 
   if (!curr.done) {
-    console.log(`[DEBUG] step=${step} 未完成，停留於此`);
-    tw.message(curr.text);
-    return res.type('text/xml').send(tw.toString());
+    if (curr.text) {
+      const tw = new MessagingResponse();
+      tw.message(curr.text);
+      return res.type('text/xml').send(tw.toString());
+    }
+    return res.status(204).end();
   }
 
   // 本步完成 → 前進或結束
@@ -198,19 +199,24 @@ app.post('/whatsapp', async (req, res) => {
   if (nextStep > STEPS.length) {
     await setStep(from, -1); // DONE
     console.log('[DEBUG] 所有步驟完成 -> step=-1');
+    const tw = new MessagingResponse();
     tw.message(finishText());
     return res.type('text/xml').send(tw.toString());
   }
 
   await setStep(from, nextStep);
-  console.log(`[DEBUG] 前進至 step=${nextStep}，立即觸發下一步`);
+  console.log(`[DEBUG] 前進至 step=${nextStep}，觸發下一步`);
   const next = await runStep(nextStep, { msg: '', from });
-  tw.message(next.text);
-  return res.type('text/xml').send(tw.toString());
+  if (next.text) {
+    const tw = new MessagingResponse();
+    tw.message(next.text);
+    return res.type('text/xml').send(tw.toString());
+  }
+  return res.status(204).end();
 });
 
 // 健康檢查
-app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.4.4-fs'));
+app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.4.5-fs'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on :${PORT}`));
