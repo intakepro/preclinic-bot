@@ -1,12 +1,12 @@
 // modules/name_input.js
-// Version: v6.0.4-fs
+// Version: v6.0.3-fs-edit+history-reset
 // 變更摘要：
-// - 加入 REVIEW 確認頁：新增與更改在寫 DB 前，先顯示四項資料讓使用者確認
-// - MENU 選舊病人：先 CONFIRM_PATIENT（1=更改 2=下一步 0=返回）
-// - 更改流程走 ADD_NAME→ADD_GENDER→ADD_DOB→ADD_ID→REVIEW→(update)
-// - 新增流程走 ADD_NAME→ADD_GENDER→ADD_DOB→ADD_ID→REVIEW→(add)
-// - 回傳介面：{ texts?: string[], text?: string, done: boolean, meta?: any }；模組不直接回 Twilio
-// - 首次進入（msg==''）只回第一題/選單，done:false
+// - 顯示個資與選項合併為一則訊息（避免多則訊息分拆）。
+// - 新增編輯既有病人流程（全欄位重填），最後「確認儲存」會 update 病人檔。
+// - 確認儲存編輯後，會自動清空該病人的病史（刪除 history 與 history_sessions 的對應文件）。
+// - 模組只回傳 { text, done }，不直接寫 Twilio response；與 index v6.4.x 對齊。
+// - 模組內部 session 狀態存於 sessions/{phone} 的 name_input 子欄位（避免覆蓋其他模組/step）。
+// - 使用者按 z 代表「進入下一步」→ 回 done:true；其他情境皆 done:false（等待輸入）。
 
 'use strict';
 const admin = require('firebase-admin');
@@ -34,59 +34,51 @@ const db = admin.firestore();
 const phoneOf = (from) =>
   (from || '').toString().replace(/^whatsapp:/i, '').trim();
 
-function isValidGender(t) { return t === '男' || t === '女'; }
-function isValidDateYYYYMMDD(t) {
+const NI = { // name_input 狀態常數
+  MENU: 'MENU',
+  CONFIRM_EXISTING: 'CONFIRM_EXISTING',
+  ADD_NAME: 'ADD_NAME',
+  ADD_GENDER: 'ADD_GENDER',
+  ADD_BIRTH: 'ADD_BIRTH',
+  ADD_ID: 'ADD_ID',
+  REVIEW_NEW: 'REVIEW_NEW',
+  EDIT_NAME: 'EDIT_NAME',
+  EDIT_GENDER: 'EDIT_GENDER',
+  EDIT_BIRTH: 'EDIT_BIRTH',
+  EDIT_ID: 'EDIT_ID',
+  REVIEW_EDIT: 'REVIEW_EDIT'
+};
+
+const isZ = (s='') => s.trim().toLowerCase() === 'z';
+const isBack = (s='') => s.trim() === '0';
+function isValidGender(t){ return t === '男' || t === '女'; }
+function isValidDateYYYYMMDD(t){
   if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false;
   const [y,m,d] = t.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m-1, d));
-  return dt.getUTCFullYear()===y && (dt.getUTCMonth()+1)===m && dt.getUTCDate()===d;
+  return dt.getUTCFullYear()===y && (dt.getUTCMonth()+1)===m && dt.getUTCDate()===d && y>=1900 && y<=2100;
 }
-function isValidId(t) { return typeof t === 'string' && t.trim().length >= 4; }
-function isBackKey(t) { return (t || '').trim() === '0'; }
+function isValidId(t){ return typeof t === 'string' && t.trim().length >= 4; }
+const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
-function renderMenu(patients, firstTime=false) {
-  const lines = [];
-  if (firstTime || patients.length===0) {
-    lines.push('👉 第 1 步：輸入病人名字模組');
-    lines.push('此電話尚未有病人資料。請先新增（姓名→性別→出生日期→身份證）。');
-    lines.push('');
-    lines.push('回覆「1」開始新增。');
-    return lines.join('\n');
-  }
-  lines.push('👉 第 1 步：輸入病人名字模組');
-  lines.push('請選擇病人，或新增其他病人：');
-  patients.forEach((p,i)=>lines.push(`${i+1}. ${p.name}`));
-  lines.push(`${patients.length+1}. ➕ 新增病人`);
-  lines.push('');
-  lines.push('請回覆編號（例如：1）。');
-  return lines.join('\n');
-}
-function renderDeleteMenu(patients){
-  const lines = [];
-  lines.push('📦 已達 8 人上限，請選擇要刪除的一位：');
-  patients.forEach((p,i)=>lines.push(`${i+1}. ${p.name}`));
-  lines.push('');
-  lines.push('回覆對應編號刪除，或輸入 0 返回上一頁。');
-  return lines.join('\n');
-}
-function renderProfile(p){
+function renderProfileBlock(p){
   return [
     '📄 病人個人資料',
-    `姓名：${p.name}`,
-    `性別：${p.gender}`,
-    `出生日期：${p.birthDate}`,
-    `身份證號碼：${p.idNumber}`
+    `姓名：${p.name || ''}`,
+    `性別：${p.gender || ''}`,
+    `出生日期：${p.birthDate || ''}`,
+    `身份證號碼：${p.idNumber || ''}`
   ].join('\n');
 }
-function renderTempSummary(temp){
+function renderChooseNext(){
   return [
-    '📄 請確認以下資料：',
-    `姓名：${temp.name || '－'}`,
-    `性別：${temp.gender || '－'}`,
-    `出生日期：${temp.birthDate || '－'}`,
-    `身份證號碼：${temp.idNumber || '－'}`
+    '',
+    '請選擇：',
+    '1️⃣ 更改資料（會重新填寫姓名、性別、出生日期、身份證）',
+    'z️⃣ 進入下一步'
   ].join('\n');
 }
+function renderInvalid(){ return '⚠️ 輸入無效，請按畫面指示回覆。'; }
 
 // ---- Firestore I/O ----
 async function ensureAccount(phone){
@@ -96,6 +88,7 @@ async function ensureAccount(phone){
   if (!s.exists) await ref.set({ phone, createdAt: now, updatedAt: now });
   else await ref.set({ updatedAt: now }, { merge: true });
 }
+
 async function listPatients(phone){
   const snap = await db.collection('users').doc(phone).collection('patients')
     .orderBy('createdAt','asc').get();
@@ -115,40 +108,42 @@ async function addPatient(phone, data){
   const ref = await col.add(payload);
   return { id: ref.id, ...payload };
 }
-async function updatePatient(phone, id, data){
-  const ref = db.collection('users').doc(phone).collection('patients').doc(id);
-  const payload = {
-    name: data.name,
-    gender: data.gender,
-    birthDate: data.birthDate,
-    idNumber: data.idNumber,
-    updatedAt: new Date()
-  };
-  await ref.set(payload, { merge: true });
-  const snap = await ref.get();
-  return { id: ref.id, ...snap.data() };
+async function updatePatient(phone, patientId, patch){
+  patch.updatedAt = new Date();
+  await db.collection('users').doc(phone).collection('patients').doc(patientId)
+    .set(patch, { merge:true });
 }
-async function deletePatient(phone, id){
-  await db.collection('users').doc(phone).collection('patients').doc(id).delete();
+async function resetHistory(phone, patientId){
+  // 1) 若你的 history/history_sessions 使用「phone#patientId」作為 key，則同時清掉
+  const key = `${phone}#${patientId}`;
+  await db.collection('history').doc(key).delete().catch(()=>{});
+  await db.collection('history_sessions').doc(key).delete().catch(()=>{});
+  // 2) 如果你曾把病史塞在 patient doc 的欄位，也一併清除（保守處理）
+  await db.collection('users').doc(phone).collection('patients').doc(patientId)
+    .set({ history: admin.firestore.FieldValue.delete() }, { merge:true })
+    .catch(()=>{});
 }
 
-// ---- Session（僅此模組用）----
-// state: INIT | MENU | CONFIRM_PATIENT | ADD_NAME | ADD_GENDER | ADD_DOB | ADD_ID | REVIEW | DELETE_MENU
-async function getFSSession(phone){
+async function getSessionDoc(phone){
   const ref = db.collection('sessions').doc(phone);
-  const s = await ref.get();
-  if (!s.exists) {
-    const fresh = { phone, module:'name_input', state:'INIT', temp:{}, updatedAt:new Date() };
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const fresh = { step: 1, updatedAt: nowTS(), name_input: { state: NI.MENU } };
     await ref.set(fresh);
-    return fresh;
+    return { ref, data: fresh };
   }
-  const data = s.data() || {};
-  data.phone = phone;
-  return data;
+  return { ref, data: snap.data() || { name_input: { state: NI.MENU } } };
 }
-async function saveFSSession(session){
-  session.updatedAt = new Date();
-  await db.collection('sessions').doc(session.phone).set(session, { merge:true });
+async function saveNI(phone, patchNI){
+  const { ref } = await getSessionDoc(phone);
+  await ref.set({ name_input: { ...patchNI }, updatedAt: nowTS() }, { merge:true });
+}
+async function setSelectedPatient(phone, { patientId, name }){
+  const { ref, data } = await getSessionDoc(phone);
+  await ref.set({
+    selectedPatient: { patientId, name, updatedAt: nowTS() },
+    updatedAt: nowTS()
+  }, { merge:true });
 }
 
 // ---- 主處理器 ----
@@ -157,290 +152,271 @@ async function handleNameInput({ req, from, msg }) {
   const phone = phoneOf(rawFrom);
   const body  = (msg ?? req?.body?.Body ?? '').toString().trim();
 
-  const wrap = (textOrArr, done=false, meta) => {
-    if (Array.isArray(textOrArr)) return { texts: textOrArr, done, meta };
-    return { text: textOrArr, done, meta };
-  };
+  if (!phone) return { text:'系統未能識別你的電話號碼，請透過 WhatsApp 連結重新進入。', done:false };
 
-  if (!phone) return wrap('系統未能識別你的電話號碼，請透過 WhatsApp 連結重新進入。', false);
+  await ensureAccount(phone);
+  const { ref, data } = await getSessionDoc(phone);
+  const ni = data.name_input || { state: NI.MENU, buffer:{}, selectedPatientId: '' };
 
-  try {
-    // ★ 首次進入：msg 空時絕不 done:true
-    if (!body) {
-      await ensureAccount(phone);
-      let session = await getFSSession(phone);
-      let patients = await listPatients(phone);
+  // 便利：即時抓目前病人清單
+  const patients = await listPatients(phone);
 
-      if (session.state === 'INIT' || patients.length === 0) {
-        session.state = 'ADD_NAME';
-        session.temp = { mode: 'create', editingId: null, old:null };
-        await saveFSSession(session);
-        return wrap([
-          '👉 第 1 步：輸入病人名字模組',
-          '1️⃣ 請輸入姓名（身份證姓名）。',
-          '（輸入 0 回上一頁）'
-        ], false);
+  // --- 歡迎或第一次進入（沒有輸入時）→ 顯示清單或進新增 ---
+  if (!body) {
+    if (!patients.length) {
+      await ref.set({ name_input: { state: NI.ADD_NAME, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+      return { text: '👉 第 1 步：輸入病人名字\n首次使用此電話號碼。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）', done:false };
+    }
+    const list = patients.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+    await ref.set({ name_input: { state: NI.MENU }, updatedAt: nowTS() }, { merge:true });
+    return { text: `👉 第 1 步：輸入病人名字\n請選擇病人或新增：\n${list}\n${patients.length+1}. ➕ 新增病人\n\n回覆編號（例如：1）。`, done:false };
+  }
+
+  // ---- 狀態機 ----
+  switch (ni.state) {
+    case NI.MENU: {
+      const n = Number(body);
+      if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
+        // 選現有
+        if (n <= patients.length) {
+          const chosen = patients[n-1];
+          await ref.set({
+            name_input: { state: NI.CONFIRM_EXISTING, selectedPatientId: chosen.id, buffer:{} },
+            updatedAt: nowTS()
+          }, { merge:true });
+
+          const text = [
+            renderProfileBlock(chosen),
+            renderChooseNext()
+          ].join('\n');
+          return { text, done:false };
+        }
+        // 新增
+        if (n === patients.length + 1) {
+          await ref.set({ name_input: { state: NI.ADD_NAME, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+          return { text:'1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）', done:false };
+        }
       }
-      session.state = 'MENU';
-      await saveFSSession(session);
-      return wrap(renderMenu(patients), false);
+      return { text: renderInvalid(), done:false };
     }
 
-    await ensureAccount(phone);
-    let session = await getFSSession(phone);
-    session.module = 'name_input';
-    let patients = await listPatients(phone);
-
-    // INIT
-    if (session.state === 'INIT') {
-      if (patients.length === 0) {
-        session.state = 'ADD_NAME';
-        session.temp = { mode: 'create', editingId: null, old:null };
-        await saveFSSession(session);
-        return wrap('首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）', false);
-      } else {
-        session.state = 'MENU';
-        await saveFSSession(session);
-        return wrap(renderMenu(patients), false);
+    case NI.CONFIRM_EXISTING: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.MENU, buffer:{} } , updatedAt: nowTS() }, { merge:true });
+        const list = patients.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+        return { text: `請選擇病人或新增：\n${list}\n${patients.length+1}. ➕ 新增病人`, done:false };
       }
+      if (body === '1') {
+        // 進入重填（編輯）流程
+        await ref.set({ name_input: { state: NI.EDIT_NAME, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+        return { text: '✏️ 請輸入更新後的姓名：\n（輸入 0 返回）', done:false };
+      }
+      if (isZ(body)) {
+        // 直接進下一步 → 設定 selectedPatient 給 index / history
+        const chosen = patients.find(p=>p.id === ni.selectedPatientId);
+        if (!chosen) return { text: '找不到所選病人，請返回選擇。', done:false };
+        await setSelectedPatient(phone, { patientId: chosen.id, name: chosen.name });
+        return { text: '✅ 病人確認，進入下一步。', done:true };
+      }
+      return { text: '請輸入 1 更改資料，或 z 進入下一步（0 返回）。', done:false };
     }
 
-    switch (session.state) {
-      case 'MENU': {
-        const n = Number(body);
-        if (patients.length === 0) {
-          session.state = 'ADD_NAME';
-          session.temp = { mode: 'create', editingId: null, old:null };
-          await saveFSSession(session);
-          return wrap('1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）', false);
-        }
-        if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
-          if (n <= patients.length) {
-            const chosen = patients[n - 1];
-            // 進入確認既有病人
-            session.state = 'CONFIRM_PATIENT';
-            session.temp = { selected: chosen, mode: 'confirm', editingId: null, old:null };
-            await saveFSSession(session);
-            return wrap([
-              renderProfile(chosen),
-              '',
-              '是否需要更改？',
-              '1️⃣ 需要更改',
-              '2️⃣ 不需要，進入下一步',
-              '0️⃣ 返回選單'
-            ], false);
-          }
-          if (n === patients.length + 1) {
-            if (patients.length >= 8) {
-              session.state = 'DELETE_MENU';
-              await saveFSSession(session);
-              return wrap('⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients), false);
-            }
-            session.state = 'ADD_NAME';
-            session.temp = { mode:'create', editingId:null, old:null };
-            await saveFSSession(session);
-            return wrap('1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）', false);
-          }
-        }
-        await saveFSSession(session);
-        return wrap(renderMenu(patients), false);
+    // ---- 新增流程 ----
+    case NI.ADD_NAME: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.MENU, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+        const list = patients.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+        return { text: `請選擇病人或新增：\n${list}\n${patients.length+1}. ➕ 新增病人`, done:false };
+      }
+      const buf = { ...(ni.buffer||{}), name: body };
+      await ref.set({ name_input: { state: NI.ADD_GENDER, buffer: buf }, updatedAt: nowTS() }, { merge:true });
+      return { text: '2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 返回）', done:false };
+    }
+
+    case NI.ADD_GENDER: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.ADD_NAME, buffer: ni.buffer||{} }, updatedAt: nowTS() }, { merge:true });
+        return { text: '1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 返回）', done:false };
+      }
+      if (!isValidGender(body)) return { text: '格式不正確。請回覆「男」或「女」。\n（輸入 0 返回）', done:false };
+      const buf = { ...(ni.buffer||{}), gender: body };
+      await ref.set({ name_input: { state: NI.ADD_BIRTH, buffer: buf }, updatedAt: nowTS() }, { merge:true });
+      return { text: '3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 返回）', done:false };
+    }
+
+    case NI.ADD_BIRTH: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.ADD_GENDER, buffer: ni.buffer||{} }, updatedAt: nowTS() }, { merge:true });
+        return { text: '2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 返回）', done:false };
+      }
+      if (!isValidDateYYYYMMDD(body)) return { text: '出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（輸入 0 返回）', done:false };
+      const buf = { ...(ni.buffer||{}), birthDate: body };
+      await ref.set({ name_input: { state: NI.ADD_ID, buffer: buf }, updatedAt: nowTS() }, { merge:true });
+      return { text: '4️⃣ 請輸入身份證號碼：\n（輸入 0 返回）', done:false };
+    }
+
+    case NI.ADD_ID: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.ADD_BIRTH, buffer: ni.buffer||{} }, updatedAt: nowTS() }, { merge:true });
+        return { text: '3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 返回）', done:false };
+      }
+      if (!isValidId(body)) return { text: '身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（輸入 0 返回）', done:false };
+
+      // 檢查名額
+      const listNow = await listPatients(phone);
+      if (listNow.length >= 8) {
+        await ref.set({ name_input: { state: NI.MENU, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+        return { text: '⚠️ 已達 8 人上限，無法新增。請刪除後再試。', done:false };
       }
 
-      case 'CONFIRM_PATIENT': {
-        const v = (body || '').trim();
-        if (v === '0') {
-          session.state = 'MENU';
-          session.temp = {};
-          await saveFSSession(session);
-          return wrap(renderMenu(patients), false);
-        }
-        if (v === '1') {
-          const sel = session.temp.selected;
-          session.state = 'ADD_NAME';
-          session.temp = {
-            mode:'edit',
-            editingId: sel?.id || null,
-            old: {
-              name: sel?.name || '',
-              gender: sel?.gender || '',
-              birthDate: sel?.birthDate || '',
-              idNumber: sel?.idNumber || ''
-            }
-          };
-          await saveFSSession(session);
-          return wrap(
-            `1️⃣ 請輸入姓名（身份證姓名）。\n（原：${session.temp.old.name || '－'}）\n（輸入 0 回上一頁）`,
-            false
-          );
-        }
-        if (v === '2') {
-          const sel = session.temp.selected;
-          return wrap('✅ 已確認，將進入下一步。', true, {
-            phone, patientId: sel?.id, name: sel?.name
-          });
-        }
-        return wrap('請輸入 1（更改）/ 2（下一步）/ 0（返回選單）', false);
-      }
+      const created = await addPatient(phone, { ...(ni.buffer||{}), idNumber: body });
+      const review = [
+        '💾 已暫存以下資料：',
+        '',
+        renderProfileBlock(created),
+        '',
+        '請確認是否儲存？',
+        '1️⃣ 確認儲存',
+        '0️⃣ 取消返回（不儲存）'
+      ].join('\n');
 
-      case 'ADD_NAME': {
-        if (isBackKey(body)) {
-          session.state = 'MENU';
-          await saveFSSession(session);
-          return wrap(renderMenu(patients, patients.length===0), false);
-        }
-        if (!body) return wrap('請輸入有效的姓名（身份證姓名）。\n（輸入 0 回上一頁）', false);
-        session.temp.name = body;
-        session.state = 'ADD_GENDER';
-        await saveFSSession(session);
-        const hint = session.temp.old?.gender ? `（原：${session.temp.old.gender}）\n` : '';
-        return wrap(`2️⃣ 請輸入性別（回覆「男」或「女」）。\n${hint}（輸入 0 回上一頁）`, false);
-      }
+      await ref.set({
+        name_input: { state: NI.REVIEW_NEW, buffer: { ...created }, selectedPatientId: created.id },
+        updatedAt: nowTS()
+      }, { merge:true });
 
-      case 'ADD_GENDER': {
-        if (isBackKey(body)) {
-          session.state = 'ADD_NAME';
-          await saveFSSession(session);
-          const hint = session.temp.old?.name ? `（原：${session.temp.old.name}）\n` : '';
-          return wrap(`1️⃣ 請輸入姓名（身份證姓名）。\n${hint}（輸入 0 回上一頁）`, false);
-        }
-        if (!isValidGender(body)) return wrap('格式不正確。請回覆「男」或「女」。\n（輸入 0 回上一頁）', false);
-        session.temp.gender = body;
-        session.state = 'ADD_DOB';
-        await saveFSSession(session);
-        const hint = session.temp.old?.birthDate ? `（原：${session.temp.old.birthDate}）\n` : '';
-        return wrap(`3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n${hint}（輸入 0 回上一頁）`, false);
-      }
+      return { text: review, done:false };
+    }
 
-      case 'ADD_DOB': {
-        if (isBackKey(body)) {
-          session.state = 'ADD_GENDER';
-          await saveFSSession(session);
-          const hint = session.temp.old?.gender ? `（原：${session.temp.old.gender}）\n` : '';
-          return wrap(`2️⃣ 請輸入性別（回覆「男」或「女」）。\n${hint}（輸入 0 回上一頁）`, false);
-        }
-        if (!isValidDateYYYYMMDD(body)) return wrap('出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（輸入 0 回上一頁）', false);
-        session.temp.birthDate = body;
-        session.state = 'ADD_ID';
-        await saveFSSession(session);
-        const hint = session.temp.old?.idNumber ? `（原：${session.temp.old.idNumber}）\n` : '';
-        return wrap(`4️⃣ 請輸入身份證號碼：\n${hint}（輸入 0 回上一頁）`, false);
-      }
+    case NI.REVIEW_NEW: {
+      if (body === '1') {
+        const buf = ni.buffer || {};
+        // 已在 ADD_ID addPatient 寫入；這邊只需設定 selectedPatient 給 index
+        await setSelectedPatient(phone, { patientId: ni.selectedPatientId, name: buf.name || '' });
 
-      case 'ADD_ID': {
-        if (isBackKey(body)) {
-          session.state = 'ADD_DOB';
-          await saveFSSession(session);
-          const hint = session.temp.old?.birthDate ? `（原：${session.temp.old.birthDate}）\n` : '';
-          return wrap(`3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n${hint}（輸入 0 回上一頁）`, false);
-        }
-        if (!isValidId(body)) return wrap('身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（輸入 0 回上一頁）', false);
-
-        session.temp.idNumber = body;
-        // 不立即寫 DB，先進 REVIEW 讓使用者確認
-        session.state = 'REVIEW';
-        await saveFSSession(session);
-        return wrap([
-          renderTempSummary(session.temp),
+        const text = [
+          '✅ 已儲存並選定此病人。',
           '',
-          '請確認以上資料是否正確？',
-          '1️⃣ 正確，儲存並進入下一步',
-          '2️⃣ 需要更改（回到姓名）',
-          '0️⃣ 返回選單（放棄）'
-        ], false);
-      }
+          renderProfileBlock(buf),
+          '',
+          '請輸入 z 進入下一步；或輸入 1 重新編輯此病人資料。'
+        ].join('\n');
 
-      case 'REVIEW': {
-        const v = (body || '').trim();
-        if (v === '0') {
-          // 放棄，回主選單
-          session.state = 'MENU';
-          session.temp = {};
-          await saveFSSession(session);
-          return wrap(renderMenu(patients), false);
-        }
-        if (v === '2') {
-          // 回姓名重填（保留當前 temp 值作提示）
-          session.state = 'ADD_NAME';
-          await saveFSSession(session);
-          const hint = session.temp?.name ? `（原：${session.temp.name}）\n` : '';
-          return wrap(`1️⃣ 請輸入姓名（身份證姓名）。\n${hint}（輸入 0 回上一頁）`, false);
-        }
-        if (v === '1') {
-          // 寫 DB
-          const isEditing = session.temp?.mode === 'edit' && !!session.temp.editingId;
-          if (isEditing) {
-            const updated = await updatePatient(phone, session.temp.editingId, {
-              name: session.temp.name,
-              gender: session.temp.gender,
-              birthDate: session.temp.birthDate,
-              idNumber: session.temp.idNumber
-            });
-            session.state = 'MENU';
-            session.temp = {};
-            await saveFSSession(session);
-            return wrap([
-              '💾 已更新。',
-              '',
-              renderProfile(updated),
-              '',
-              '✅ 已確認，將進入下一步。'
-            ], true, { phone, patientId: updated.id, name: updated.name });
-          } else {
-            // 新增要先檢查名額
-            const ps = await listPatients(phone);
-            if (ps.length >= 8) {
-              session.state = 'DELETE_MENU';
-              await saveFSSession(session);
-              return wrap('⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(ps), false);
-            }
-            const created = await addPatient(phone, {
-              name: session.temp.name,
-              gender: session.temp.gender,
-              birthDate: session.temp.birthDate,
-              idNumber: session.temp.idNumber
-            });
-            session.state = 'MENU';
-            session.temp = {};
-            await saveFSSession(session);
-            return wrap([
-              '💾 已儲存。',
-              '',
-              renderProfile(created),
-              '',
-              '✅ 已選擇此病人，將進入下一步。'
-            ], true, { phone, patientId: created.id, name: created.name });
-          }
-        }
-        return wrap('請輸入：1=正確、2=需要更改、0=返回選單', false);
-      }
+        // 返回確認畫面（可選擇 z 繼續，或 1 再編輯）
+        await ref.set({
+          name_input: { state: NI.CONFIRM_EXISTING, buffer:{}, selectedPatientId: ni.selectedPatientId },
+          updatedAt: nowTS()
+        }, { merge:true });
 
-      case 'DELETE_MENU': {
-        if (isBackKey(body)) {
-          session.state = 'MENU';
-          await saveFSSession(session);
-          return wrap(renderMenu(patients), false);
-        }
-        const n = Number(body);
-        if (Number.isInteger(n) && n >=1 && n <= patients.length) {
-          const target = patients[n-1];
-          await deletePatient(phone, target.id);
-          session.state = 'MENU';
-          await saveFSSession(session);
-          const after = await listPatients(phone);
-          return wrap([`🗑️ 已刪除：${target.name}`, '', renderMenu(after)], false);
-        }
-        return wrap(renderDeleteMenu(patients), false);
+        return { text, done:false };
       }
-
-      default: {
-        session.state = 'MENU';
-        await saveFSSession(session);
-        return wrap(renderMenu(patients, patients.length===0), false);
+      if (isBack(body)) {
+        // 取消不存，回到選單
+        await ref.set({ name_input: { state: NI.MENU, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+        const list = patients.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+        return { text: `已取消。\n\n請選擇病人或新增：\n${list}\n${patients.length+1}. ➕ 新增病人`, done:false };
       }
+      return { text: '請輸入：1 確認儲存，或 0 取消返回。', done:false };
     }
-  } catch (err) {
-    console.error('[name_input] error:', err?.stack || err);
-    return wrap('系統暫時忙碌，請稍後再試。', false);
+
+    // ---- 編輯既有病人（重填四欄）----
+    case NI.EDIT_NAME: {
+      if (isBack(body)) {
+        // 返回確認畫面
+        const chosen = patients.find(p=>p.id === ni.selectedPatientId);
+        await ref.set({ name_input: { state: NI.CONFIRM_EXISTING, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+        const text = [ renderProfileBlock(chosen || {}), renderChooseNext() ].join('\n');
+        return { text, done:false };
+      }
+      const buf = { name: body };
+      await ref.set({ name_input: { state: NI.EDIT_GENDER, buffer: buf, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+      return { text: '請輸入性別（男 / 女）：\n（輸入 0 返回）', done:false };
+    }
+    case NI.EDIT_GENDER: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.EDIT_NAME, buffer: ni.buffer||{}, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+        return { text: '請輸入更新後的姓名：\n（輸入 0 返回）', done:false };
+      }
+      if (!isValidGender(body)) return { text: '格式不正確。請回覆「男」或「女」。\n（輸入 0 返回）', done:false };
+      const buf = { ...(ni.buffer||{}), gender: body };
+      await ref.set({ name_input: { state: NI.EDIT_BIRTH, buffer: buf, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+      return { text: '請輸入出生日期（YYYY-MM-DD）：\n（輸入 0 返回）', done:false };
+    }
+    case NI.EDIT_BIRTH: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.EDIT_GENDER, buffer: ni.buffer||{}, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+        return { text: '請輸入性別（男 / 女）：\n（輸入 0 返回）', done:false };
+      }
+      if (!isValidDateYYYYMMDD(body)) return { text: '出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（輸入 0 返回）', done:false };
+      const buf = { ...(ni.buffer||{}), birthDate: body };
+      await ref.set({ name_input: { state: NI.EDIT_ID, buffer: buf, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+      return { text: '請輸入身份證號碼：\n（輸入 0 返回）', done:false };
+    }
+    case NI.EDIT_ID: {
+      if (isBack(body)) {
+        await ref.set({ name_input: { state: NI.EDIT_BIRTH, buffer: ni.buffer||{}, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+        return { text: '請輸入出生日期（YYYY-MM-DD）：\n（輸入 0 返回）', done:false };
+      }
+      if (!isValidId(body)) return { text: '身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（輸入 0 返回）', done:false };
+
+      const preview = {
+        name: (ni.buffer||{}).name,
+        gender: (ni.buffer||{}).gender,
+        birthDate: (ni.buffer||{}).birthDate,
+        idNumber: body
+      };
+      await ref.set({ name_input: { state: NI.REVIEW_EDIT, buffer: preview, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+
+      const text = [
+        '請確認以下更新內容：',
+        '',
+        renderProfileBlock(preview),
+        '',
+        '1️⃣ 確認儲存（將清空此病人的舊病史）',
+        '0️⃣ 取消（返回上一頁）'
+      ].join('\n');
+
+      return { text, done:false };
+    }
+    case NI.REVIEW_EDIT: {
+      if (body === '1') {
+        const pid = ni.selectedPatientId;
+        const buf = ni.buffer || {};
+        // 1) 更新 profile
+        await updatePatient(phone, pid, {
+          name: buf.name, gender: buf.gender, birthDate: buf.birthDate, idNumber: buf.idNumber
+        });
+        // 2) 清空病史（history + history_sessions）
+        await resetHistory(phone, pid);
+        // 3) 設定 selectedPatient 給下一步
+        await setSelectedPatient(phone, { patientId: pid, name: buf.name || '' });
+
+        const chosenText = [
+          '✅ 已更新病人資料，並清空舊有病史。',
+          '',
+          renderProfileBlock(buf),
+          '',
+          '請輸入 z 進入下一步；或輸入 1 再次更改。'
+        ].join('\n');
+
+        // 返回確認畫面狀態（等待使用者 z 或 1）
+        await ref.set({ name_input: { state: NI.CONFIRM_EXISTING, buffer:{}, selectedPatientId: pid }, updatedAt: nowTS() }, { merge:true });
+
+        return { text: chosenText, done:false };
+      }
+      if (isBack(body)) {
+        // 返回上一頁（再輸入身份證）
+        await ref.set({ name_input: { state: NI.EDIT_ID, buffer: ni.buffer||{}, selectedPatientId: ni.selectedPatientId }, updatedAt: nowTS() }, { merge:true });
+        return { text: '請輸入身份證號碼：\n（輸入 0 返回）', done:false };
+      }
+      return { text: '請輸入 1 確認儲存，或 0 取消返回。', done:false };
+    }
+
+    default:
+      // 不認得狀態 → 回主選單
+      await ref.set({ name_input: { state: NI.MENU, buffer:{} }, updatedAt: nowTS() }, { merge:true });
+      const list = patients.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
+      return { text: `👉 第 1 步：輸入病人名字\n請選擇病人或新增：\n${list}\n${patients.length+1}. ➕ 新增病人\n\n回覆編號（例如：1）。`, done:false };
   }
 }
 
