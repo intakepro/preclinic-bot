@@ -1,9 +1,7 @@
 // index.js
-// Version: v6.4.1-fs
-// 變更（相對 v6.4.0-fs）:
-// - 歡迎畫面輸入「z」或包含「我想做預先問診」時，若第 1 步已 done，立即自動前進到第 2 步。
-// - 任意時刻訊息包含「我想做預先問診」或 restart -> 立即重設並從第 1 步開始。
-// - 完成後 step = -1，靜默；收到 start 關鍵字或「我想做預先問診」才重啟。
+// Version: v6.5.1-fs
+// 修正：在啟動（歡迎畫面輸入「我想做預先問診」或 z / restart）時，
+//       若第 1 步已回傳 done:true，立即前進到第 2 步並回覆其訊息（不再卡在「此步已完成」）。
 
 'use strict';
 
@@ -32,11 +30,11 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
-// ===== 模組（與你現有版本相容）=====
-const { handleNameInput } = require('./modules/name_input');   // v6.0.1-fs 建議
+// ===== 模組 =====
+const { handleNameInput } = require('./modules/name_input');   // v6.0.1-fs
 const { handleAuth }      = require('./modules/auth');
 const { handleProfile }   = require('./modules/profile');
-const { handleHistory }   = require('./modules/history');      // v6.2.1-fs-composite 建議
+const { handleHistory }   = require('./modules/history');      // v6.2.1-fs-composite
 const { handleInterview } = require('./modules/interview');
 const { handleAiSummar }  = require('./modules/ai_summar');
 const { handleExport }    = require('./modules/export');
@@ -55,7 +53,7 @@ const STEPS = [
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ===== Session 工具 =====
+// ===== Session Utils =====
 const phoneOf = (from) =>
   (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
 
@@ -93,7 +91,7 @@ const finishText  = () =>
 const containsStartPhrase = (s='') => /我想做預先問診/i.test(s);
 const isStartKeyword = (s='') => /^(z|start|hi|restart)$/i.test((s||'').trim());
 
-// ===== 單步執行器（history 會帶 selectedPatient）=====
+// ===== 執行步驟 =====
 async function runStep(stepId, { msg, from }) {
   const def = STEPS.find(s => s.id === stepId);
   if (!def || typeof def.handler !== 'function') {
@@ -130,7 +128,7 @@ app.post('/whatsapp', async (req, res) => {
   const body = (req.body.Body || '').toString().trim();
   let step = await getStep(from);
 
-  // 任何狀態：包含「我想做預先問診」或 restart -> 立即從第 1 步開始
+  // A. 任何時候：包含「我想做預先問診」或 restart → 立即從第 1 步開始，且若第 1 步已完成就直接前進
   if (containsStartPhrase(body) || /^restart$/i.test(body)) {
     await setStep(from, 1);
     const r1 = await runStep(1, { msg: '', from });
@@ -152,7 +150,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(tw.toString());
   }
 
-  // 已完成（step = -1）：只有 start 關鍵字才重啟；其他情況靜默
+  // B. 流程已完成（step = -1）：只有收到 start 類關鍵字才重啟
   if (step === -1) {
     if (isStartKeyword(body)) {
       await setStep(from, 1);
@@ -177,7 +175,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.status(204).end();
   }
 
-  // 歡迎畫面（step = 0）
+  // C. 歡迎畫面（step = 0）
   if (step === 0) {
     const tw = new MessagingResponse();
     if (isStartKeyword(body)) {
@@ -203,7 +201,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(tw.toString());
   }
 
-  // 超範圍保險
+  // D. 超範圍保險
   if (step > STEPS.length) {
     await setStep(from, -1);
     const tw = new MessagingResponse();
@@ -211,7 +209,7 @@ app.post('/whatsapp', async (req, res) => {
     return res.type('text/xml').send(tw.toString());
   }
 
-  // 一般流程：交給當前步驟
+  // E. 正常流程：把輸入交給當前步驟
   const curr = await runStep(step, { msg: body, from });
   const tw = new MessagingResponse();
 
@@ -235,7 +233,7 @@ app.post('/whatsapp', async (req, res) => {
 });
 
 // 健康檢查
-app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.4.1-fs'));
+app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.5.1-fs'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on :${PORT}`));
