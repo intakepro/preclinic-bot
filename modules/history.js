@@ -1,30 +1,28 @@
 /**
- * Module: modules/history.js
- * Version: v6.1.0-fs-patientName
- *
- * 介面：async handleHistory({ msg, from, patientName }) -> { text: string, done: boolean }
+ * File: modules/history.js
+ * Version: v6.2.1-fs-composite
+ * Interface: async handleHistory({ msg, from, patientId, patientName }) -> { text, done }
  *
  * 更新內容：
- * - 修正「在舊病史畫面按 1 不能更改」問題 ✅
- * - 修正「在舊病史畫面按 z 不能進入下一步」問題 ✅
- * - 新增功能：顯示病史時，在頂部加插病人名稱 + 電話末4碼（debug 用） ✅
+ * - 保持 ENTRY→SHOW_EXISTING 時列出「病人名稱 + 電話末4」與完整病史摘要，並提供 1/z 選項。
+ * - DONE 狀態不靜默：持續提供 1（更改）/ z（完成）以免用戶誤會已卡住。
  */
 
 'use strict';
 
 const admin = require('firebase-admin');
 
-// ---------- Firebase 初始化 ----------
+// --- Firebase ---
 (function ensureFirebase() {
   if (admin.apps.length) return;
   try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
       admin.initializeApp({ credential: admin.credential.cert(sa) });
-      console.log('[history] Firebase initialized via FIREBASE_SERVICE_ACCOUNT');
+      console.log('[history] Firebase via FIREBASE_SERVICE_ACCOUNT');
     } else {
       admin.initializeApp();
-      console.log('[history] Firebase initialized via default credentials');
+      console.log('[history] Firebase via default credentials');
     }
   } catch (e) {
     console.error('[history] Firebase init error:', e?.message || e);
@@ -32,8 +30,8 @@ const admin = require('firebase-admin');
   }
 })();
 const db = admin.firestore();
+const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
-// ---------- 狀態常數 ----------
 const STATES = {
   ENTRY: 'H_ENTRY',
   SHOW_EXISTING: 'H_SHOW',
@@ -52,44 +50,24 @@ const STATES = {
   DONE: 'H_DONE'
 };
 
-const PMH_OPTIONS = [
-  '高血壓',
-  '糖尿病',
-  '心臟病',
-  '腎臟病',
-  '肝病',
-  '中風',
-  '癌症',
-  '其他',
-  '無'
-];
+const PMH_OPTIONS = ['高血壓','糖尿病','心臟病','腎臟病','肝病','中風','癌症','其他','無'];
+const YES = '1', NO = '2';
 
-const YES = '1';
-const NO  = '2';
+const phoneKey = (from) =>
+  (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
+const last4 = (phone) => (phone || '').replace(/\D/g,'').slice(-4) || '----';
+const isZ = (v='') => /^z$/i.test(v.trim());
+const isOne = (v='') => v.trim() === '1';
+const isYesNo = (v) => v === YES || v === NO;
 
-// ---------- 小工具 ----------
-const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
-
-function userKeyOrDefault(from) {
-  const raw = (from || '').toString().replace(/^whatsapp:/i, '').trim();
-  return raw || 'DEFAULT';
-}
-function last4(phone) {
-  const digits = (phone || '').replace(/\D/g, '');
-  return digits.slice(-4) || '----';
-}
-function isZ(input)      { return typeof input === 'string' && /^z$/i.test(input.trim()); }
-function isOne(input)    { return (input || '').trim() === '1'; }
-function isYesNo(v)      { return v === YES || v === NO; }
-function isEmpty(s)      { return !s || s.trim().length === 0; }
+const header = (name, phone) => `【病人：${name || '未命名'}（${last4(phone)}）】`;
 
 function initHistory(){
-  return {
-    pmh: [],
-    meds: [],
-    allergies: { types: [], items: [] },
-    social: { smoking:'', alcohol:'', travel:'' }
-  };
+  return { pmh: [], meds: [], allergies: { types: [], items: [] }, social: { smoking:'', alcohol:'', travel:'' } };
+}
+function renderPMHMenu(){
+  return '請選擇您曾經患有的疾病（可複選，用逗號分隔數字）：\n' +
+    PMH_OPTIONS.map((t,i)=>`${i+1}️⃣ ${t}`).join('\n');
 }
 function commaNumListToIndices(text) {
   return String(text || '')
@@ -99,10 +77,6 @@ function commaNumListToIndices(text) {
     .filter(Boolean)
     .map(n => parseInt(n, 10))
     .filter(n => !Number.isNaN(n));
-}
-function renderPMHMenu(){
-  return '請選擇您曾經患有的疾病（可複選，用逗號分隔數字）：\n' +
-    PMH_OPTIONS.map((t,i)=>`${i+1}️⃣ ${t}`).join('\n');
 }
 function renderSummary(h){
   const pmh      = h.pmh?.length ? h.pmh.join('、') : '無';
@@ -120,49 +94,56 @@ function renderSummary(h){
     `- 吸菸：${smoking}；飲酒：${alcohol}；近期出國：${travel}`
   ].join('\n');
 }
-function renderReview(h, patientName, phone) {
-  return `🧑‍⚕️ 病人：${patientName || '（未命名）'} (${last4(phone)})\n\n感謝您提供病史資料 🙏\n以下是您剛填寫的內容：\n${renderSummary(h)}\n\n請問需要更改嗎？\n1️⃣ 需要更改\nz️⃣ 進入下一步`;
+function reviewText(h, name, phone){
+  return `${header(name, phone)}\n感謝您提供病史資料 🙏\n以下是您剛填寫的內容：\n${renderSummary(h)}\n\n請問需要更改嗎？\n1️⃣ 需要更改\nz️⃣ 進入下一步`;
 }
 
-// ---------- Firestore I/O ----------
-async function getSession(userKey) {
-  const ref = db.collection('history_sessions').doc(userKey);
+// --- Firestore I/O（用複合鍵）---
+function keyOf(phone, patientId){ return `${phone}__${patientId}`; }
+async function getSession(historyKey){
+  const ref = db.collection('history_sessions').doc(historyKey);
   const s = await ref.get();
   if (s.exists) return s.data();
   const fresh = { state: STATES.ENTRY, buffer: {}, updatedAt: nowTS() };
   await ref.set(fresh);
   return fresh;
 }
-async function saveSession(userKey, patch) {
-  await db.collection('history_sessions').doc(userKey).set({ ...patch, updatedAt: nowTS() }, { merge: true });
+async function saveSession(historyKey, patch){
+  await db.collection('history_sessions').doc(historyKey)
+    .set({ ...patch, updatedAt: nowTS() }, { merge: true });
 }
-async function getHistory(userKey) {
-  const ref = db.collection('history').doc(userKey);
+async function getHistory(historyKey){
+  const ref = db.collection('history').doc(historyKey);
   const s = await ref.get();
   return s.exists ? (s.data()?.history || null) : null;
 }
-async function saveHistory(userKey, historyObj) {
-  await db.collection('history').doc(userKey).set({ history: historyObj, updatedAt: nowTS() }, { merge: true });
+async function saveHistory(historyKey, historyObj){
+  await db.collection('history').doc(historyKey)
+    .set({ history: historyObj, updatedAt: nowTS() }, { merge: true });
 }
 
-// ---------- 主處理器 ----------
-async function handleHistory({ msg, from, patientName }) {
-  const body = (msg || '').trim();
-  const userKey = userKeyOrDefault(from);
+// --- 主處理器 ---
+module.exports.handleHistory = async function handleHistory({ msg, from, patientId, patientName }) {
+  const phone = phoneKey(from);
+  const body  = (msg || '').trim();
 
-  // 讀取目前 session & history
-  let session = await getSession(userKey);
-  let history = await getHistory(userKey);
+  if (!patientId) {
+    return { text: '⚠️ 未取得病人代號（patientId）。請回到第 1 步選擇病人後再試。', done: false };
+  }
+
+  const hKey = keyOf(phone, patientId);
+  let session = await getSession(hKey);
+  let history = await getHistory(hKey);
 
   // 入口
   if (session.state === STATES.ENTRY) {
     if (history) {
       session.state = STATES.SHOW_EXISTING;
-      await saveSession(userKey, session);
+      await saveSession(hKey, { state: session.state });
       return {
         text:
-`👉 第 4 步：讀取病人病史模組
-🧑‍⚕️ 病人：${patientName || '（未命名）'} (${last4(from)})
+`${header(patientName, phone)}
+👉 第 4 步：讀取病人病史模組
 
 已找到你之前輸入的病史資料：
 ${renderSummary(history)}
@@ -172,59 +153,75 @@ ${renderSummary(history)}
 z️⃣ 進入下一步`,
         done: false
       };
-    } else {
-      session.state = STATES.FIRST_NOTICE;
-      await saveSession(userKey, session);
-      return {
-        text:
-`👉 第 4 步：讀取病人病史模組
-🧑‍⚕️ 病人：${patientName || '（未命名）'} (${last4(from)})
+    }
+    session.state = STATES.FIRST_NOTICE;
+    await saveSession(hKey, { state: session.state });
+    return {
+      text:
+`${header(patientName, phone)}
+👉 第 4 步：讀取病人病史模組
 
-首次使用此電話號碼，我們會收集基本病史資料（約 2–3 分鐘）。
+首次使用此病人資料，我們會收集基本病史（約 2–3 分鐘）。
 
 請按 z 開始。`,
-        done: false
-      };
-    }
+      done: false
+    };
   }
 
-  // 顯示舊資料，決定是否更改
+  // 舊資料確認
   if (session.state === STATES.SHOW_EXISTING) {
     if (isOne(body)) {
       session.state = STATES.PMH_SELECT;
       session.buffer = { history: initHistory() };
-      await saveSession(userKey, session);
-      return { text: renderPMHMenu(), done: false };
+      await saveSession(hKey, { state: session.state, buffer: session.buffer });
+      return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
     }
     if (isZ(body)) {
       session.state = STATES.DONE;
-      await saveSession(userKey, session);
-      return { text: '✅ 病史已確認無需更改，將進入下一步。', done: true };
+      await saveSession(hKey, { state: session.state });
+      return { text: `${header(patientName, phone)}\n✅ 病史已確認無需更改，將進入下一步。`, done: true };
     }
-    return { text: '請回覆：1＝需要更改，或 z＝進入下一步。', done: false };
+    return { text: `${header(patientName, phone)}\n請回覆：1＝需要更改，或 z＝進入下一步。`, done: false };
   }
 
-  // 其餘流程（略，和之前版本相同，會逐步收集資料並在最後 REVIEW 時呼叫 renderReview）
+  // ……（中間填寫流程與你 v6.2.0 相同，略）……
+  // REVIEW
   if (session.state === STATES.REVIEW) {
     if (isOne(body)) {
       session.state = STATES.PMH_SELECT;
       session.buffer = { history: initHistory() };
-      await saveSession(userKey, session);
-      return { text: renderPMHMenu(), done: false };
+      await saveSession(hKey, { state: session.state, buffer: session.buffer });
+      return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
     }
     if (isZ(body)) {
       session.state = STATES.DONE;
-      await saveSession(userKey, session);
-      return { text: '✅ 已完成病史填寫，將進入下一步。', done: true };
+      await saveSession(hKey, { state: session.state });
+      return { text: `${header(patientName, phone)}\n✅ 已儲存最新病史，將進入下一個模組。`, done: true };
     }
-    return { text: '請回覆：1＝需要更改，或 z＝進入下一步。', done: false };
+    return { text: `${header(patientName, phone)}\n請回覆：1＝需要更改，或 z＝進入下一步。`, done: false };
   }
 
+  // DONE（不靜默）
   if (session.state === STATES.DONE) {
-    return { text: '✅ 病史模組已完成。', done: true };
+    const t = body.toLowerCase();
+    if (t === '1') {
+      session.state  = STATES.PMH_SELECT;
+      session.buffer = { history: initHistory() };
+      await saveSession(hKey, { state: session.state, buffer: session.buffer });
+      return { text: `${header(patientName, phone)}\n${renderPMHMenu()}`, done: false };
+    }
+    if (t === 'z') {
+      return { text: `${header(patientName, phone)}\n✅ 病史模組已完成，進入下一步。`, done: true };
+    }
+    return {
+      text: `${header(patientName, phone)}\n（提示）病史模組已完成。\n如需更改請回覆 1；否則按 z 進入下一步。`,
+      done: false
+    };
   }
 
-  return { text: '⚠️ 輸入不正確，請再試一次。', done: false };
-}
-
-module.exports = { handleHistory };
+  // 兜底
+  session.state = STATES.ENTRY;
+  session.buffer = {};
+  await saveSession(hKey, { state: session.state, buffer: session.buffer });
+  return { text: `${header(patientName, phone)}\n已重置病史模組，請重新開始。`, done: false };
+};
