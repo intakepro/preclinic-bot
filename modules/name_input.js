@@ -1,11 +1,12 @@
 /**
  * File: modules/name_input.js
- * Version: v6.0.1-fs
+ * Version: v6.0.0-fs
  * Interface: async handleNameInput({ msg, from }) -> { text, done }
  *
- * 更新內容：
- * - 新增 resetHistorySession(phone, patientId)：當選擇/新增病人後，清除該病人的 history_sessions，
- *   以確保進入 History 時會顯示「既有病史摘要 + 1/ z 選項」，而不是殘留在 DONE。
+ * 功能：
+ * - 多病人：users/{phone}/patients/{patientId}
+ * - 完成選擇/新增後：寫入 sessions/{phone}.selectedPatient = { patientId, name }
+ * - 僅回傳 {text, done}，不直接回覆 Twilio
  */
 
 'use strict';
@@ -72,12 +73,6 @@ async function touchSelectedPatient(phone, sel) {
     .set({ selectedPatient: { patientId: sel.patientId, name: sel.name }, updatedAt: nowTS() }, { merge: true });
 }
 
-// 🔧 新增：重置該病人的 History Session
-async function resetHistorySession(phone, patientId) {
-  const historyKey = `${phone}__${patientId}`;
-  await db.collection('history_sessions').doc(historyKey).delete().catch(() => {});
-}
-
 function renderMenu(patients) {
   if (!patients.length) {
     return [
@@ -117,10 +112,6 @@ module.exports.handleNameInput = async function handleNameInput({ msg, from }) {
       const chosen = patients[n - 1];
       const sel = { patientId: chosen.id, name: chosen.name };
       await touchSelectedPatient(phone, sel);
-
-      // ⭐ 重點：重置該病人的 History session，避免殘留在 DONE
-      await resetHistorySession(phone, sel.patientId);
-
       session.state = STATES.DONE;
       await saveNiSession(phone, { state: session.state, buffer: {} });
       return {
@@ -145,10 +136,6 @@ module.exports.handleNameInput = async function handleNameInput({ msg, from }) {
     const created = await createPatient(phone, body);
     const sel = { patientId: created.id, name: created.name };
     await touchSelectedPatient(phone, sel);
-
-    // ⭐ 新增病人後也重置（確保首次會走完整流程）
-    await resetHistorySession(phone, sel.patientId);
-
     session.state = STATES.DONE;
     await saveNiSession(phone, { state: session.state, buffer: {} });
     return {
