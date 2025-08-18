@@ -1,7 +1,9 @@
 // index.js
-// Version: v6.5.1-fs
-// 修正：在啟動（歡迎畫面輸入「我想做預先問診」或 z / restart）時，
-//       若第 1 步已回傳 done:true，立即前進到第 2 步並回覆其訊息（不再卡在「此步已完成」）。
+// Version: v6.4.3-fs
+// 變更要點：
+// - 任意時刻：只要訊息「包含」『我想做預先問診』或輸入 restart → 完全重置為 step=0，回覆【歡迎語】；不自動進入第 1 步。
+// - 歡迎畫面（step=0）：只能輸入 z 才進入第 1 步（不接受 start/hi）。若再次輸入『我想做預先問診』仍會重置回歡迎語。
+// - 步驟完成後自動前進；全部完成後 step=-1（靜默），直到再收到『我想做預先問診』或 restart 才重設。
 
 'use strict';
 
@@ -30,16 +32,16 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
-// ===== 模組 =====
-const { handleNameInput } = require('./modules/name_input');   // v6.0.1-fs
+// ===== 載入你的模組（與現有版本相容）=====
+const { handleNameInput } = require('./modules/name_input');   // v6.0.1-fs（建議）
 const { handleAuth }      = require('./modules/auth');
 const { handleProfile }   = require('./modules/profile');
-const { handleHistory }   = require('./modules/history');      // v6.2.1-fs-composite
+const { handleHistory }   = require('./modules/history');      // v6.2.1-fs-composite（建議）
 const { handleInterview } = require('./modules/interview');
 const { handleAiSummar }  = require('./modules/ai_summar');
 const { handleExport }    = require('./modules/export');
 
-// ===== 步驟表 =====
+// ===== 步驟表（可減少項目；程式會自動判斷最後一步）=====
 const STEPS = [
   { id: 1, key: 'name_input', name: '輸入病人名字模組', handler: handleNameInput },
   { id: 2, key: 'auth',       name: '病人問診權限檢查模組', handler: handleAuth },
@@ -53,7 +55,7 @@ const STEPS = [
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ===== Session Utils =====
+// ===== Session 工具 =====
 const phoneOf = (from) =>
   (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
 
@@ -81,17 +83,20 @@ async function getStep(from) {
 async function setStep(from, step) {
   await setSession(from, { step });
 }
+async function clearSelectedPatient(from) {
+  await setSession(from, { selectedPatient: admin.firestore.FieldValue.delete() });
+}
 
 // ===== 文案 / 觸發詞 =====
 const welcomeText = () =>
-  '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊\n\n請回覆「我想做預先問診」或輸入 z 開始第 1 步。';
+  '👋 歡迎使用 X 醫生問診系統，我哋而家開始啦⋯⋯😊\n\n請輸入 **z** 開始第 1 步。';
 const finishText  = () =>
-  '✅ 問診已完成，你的資料已傳送給醫生，謝謝你，祝你早日康復 ❤️\n（如需重新開始，請回覆「我想做預先問診」或輸入 restart）';
+  '✅ 問診已完成，你的資料已傳送給醫生，謝謝你，祝你早日康復 ❤️\n（如需重新開始，請輸入「我想做預先問診」或 restart）';
 
 const containsStartPhrase = (s='') => /我想做預先問診/i.test(s);
-const isStartKeyword = (s='') => /^(z|start|hi|restart)$/i.test((s||'').trim());
+const isZ = (s='') => s.trim().toLowerCase() === 'z';
 
-// ===== 執行步驟 =====
+// ===== 單步執行器（history 會帶 selectedPatient）=====
 async function runStep(stepId, { msg, from }) {
   const def = STEPS.find(s => s.id === stepId);
   if (!def || typeof def.handler !== 'function') {
@@ -106,7 +111,7 @@ async function runStep(stepId, { msg, from }) {
       const patientName = sel.name || '';
       if (!patientId || !patientName) {
         return {
-          text: '⚠️ 尚未選定病人，請回到第 1 步選擇或新增病人後再試。\n（輸入「我想做預先問診」或 restart 重新開始）',
+          text: '⚠️ 尚未選定病人，請回到第 1 步選擇或新增病人後再試。\n（輸入「我想做預先問診」或 restart 回到歡迎畫面）',
           done: false
         };
       }
@@ -118,7 +123,7 @@ async function runStep(stepId, { msg, from }) {
     return { text: r.text || `👉 第 ${stepId} 步（製作中）`, done: !!r.done };
   } catch (e) {
     console.error(`[index] step ${stepId} error:`, e?.stack || e);
-    return { text: `⚠️ 第 ${stepId} 步發生錯誤，請稍後再試或輸入 restart 重新開始。`, done: false };
+    return { text: `⚠️ 第 ${stepId} 步發生錯誤，請稍後再試或輸入「我想做預先問診」或 restart 回到歡迎畫面。`, done: false };
   }
 }
 
@@ -128,77 +133,46 @@ app.post('/whatsapp', async (req, res) => {
   const body = (req.body.Body || '').toString().trim();
   let step = await getStep(from);
 
-  // A. 任何時候：包含「我想做預先問診」或 restart → 立即從第 1 步開始，且若第 1 步已完成就直接前進
+  // A. 任意時刻：包含『我想做預先問診』或 restart → 完全重置為 step=0，清除已選病人，回覆【歡迎語】（不自動進 Step 1）
   if (containsStartPhrase(body) || /^restart$/i.test(body)) {
-    await setStep(from, 1);
-    const r1 = await runStep(1, { msg: '', from });
+    await clearSelectedPatient(from);
+    await setStep(from, 0);
     const tw = new MessagingResponse();
+    tw.message(welcomeText());
+    return res.type('text/xml').send(tw.toString());
+  }
 
-    if (r1.done) {
+  // B. 全部完成（step = -1）：除非再收到『我想做預先問診』或 restart，否則靜默
+  if (step === -1) {
+    return res.status(204).end();
+  }
+
+  // C. 歡迎畫面（step = 0）：只有 z 能開始第 1 步；其它文字（包括 start/hi）一律重覆歡迎語
+  if (step === 0) {
+    const tw = new MessagingResponse();
+    if (isZ(body)) {
+      await setStep(from, 1);
+      const r1 = await runStep(1, { msg: '', from });
+      // 第 1 步未完成 → 回覆第 1 步內容
+      if (!r1.done) {
+        tw.message(r1.text);
+        return res.type('text/xml').send(tw.toString());
+      }
+      // 第 1 步已完成 → 直接前進至第 2 步
       const nextStep = 2;
       if (nextStep > STEPS.length) {
         await setStep(from, -1);
         tw.message(finishText());
-      } else {
-        await setStep(from, nextStep);
-        const next = await runStep(nextStep, { msg: '', from });
-        tw.message(next.text);
+        return res.type('text/xml').send(tw.toString());
       }
-    } else {
-      tw.message(r1.text);
-    }
-    return res.type('text/xml').send(tw.toString());
-  }
-
-  // B. 流程已完成（step = -1）：只有收到 start 類關鍵字才重啟
-  if (step === -1) {
-    if (isStartKeyword(body)) {
-      await setStep(from, 1);
-      const r1 = await runStep(1, { msg: '', from });
-      const tw = new MessagingResponse();
-
-      if (r1.done) {
-        const nextStep = 2;
-        if (nextStep > STEPS.length) {
-          await setStep(from, -1);
-          tw.message(finishText());
-        } else {
-          await setStep(from, nextStep);
-          const next = await runStep(nextStep, { msg: '', from });
-          tw.message(next.text);
-        }
-      } else {
-        tw.message(r1.text);
-      }
+      await setStep(from, nextStep);
+      const next = await runStep(nextStep, { msg: '', from });
+      tw.message(next.text);
       return res.type('text/xml').send(tw.toString());
-    }
-    return res.status(204).end();
-  }
-
-  // C. 歡迎畫面（step = 0）
-  if (step === 0) {
-    const tw = new MessagingResponse();
-    if (isStartKeyword(body)) {
-      await setStep(from, 1);
-      const r1 = await runStep(1, { msg: '', from });
-
-      if (r1.done) {
-        const nextStep = 2;
-        if (nextStep > STEPS.length) {
-          await setStep(from, -1);
-          tw.message(finishText());
-        } else {
-          await setStep(from, nextStep);
-          const next = await runStep(nextStep, { msg: '', from });
-          tw.message(next.text);
-        }
-      } else {
-        tw.message(r1.text);
-      }
     } else {
       tw.message(welcomeText());
+      return res.type('text/xml').send(tw.toString());
     }
-    return res.type('text/xml').send(tw.toString());
   }
 
   // D. 超範圍保險
@@ -233,7 +207,7 @@ app.post('/whatsapp', async (req, res) => {
 });
 
 // 健康檢查
-app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.5.1-fs'));
+app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.4.3-fs'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on :${PORT}`));
