@@ -1,8 +1,6 @@
 // modules/name_input.js
-// WhatsApp「輸入病人名字」模組（Firestore）
-// 功能：帳號=電話；每帳號最多 8 人；0 回上一頁；滿額→顯示刪除名單；選定或新增後顯示個人資料並回傳完成訊號
+// WhatsApp「輸入病人名字」模組（Firestore；安全版：只回傳字串，不直接 res.send）
 
-const { MessagingResponse } = require('twilio').twiml;
 const admin = require('firebase-admin');
 
 // --- Firebase 初始化（只初始化一次） ---
@@ -30,8 +28,9 @@ function db() { ensureFirebase(); return admin.firestore(); }
 async function ensureAccount(phone) {
   const userRef = db().collection('users').doc(phone);
   const s = await userRef.get();
-  if (!s.exists) await userRef.set({ phone, createdAt: new Date(), updatedAt: new Date() });
-  else await userRef.set({ updatedAt: new Date() }, { merge: true });
+  const now = new Date();
+  if (!s.exists) await userRef.set({ phone, createdAt: now, updatedAt: now });
+  else await userRef.set({ updatedAt: now }, { merge: true });
 }
 async function listPatients(phone) {
   const snap = await db().collection('users').doc(phone).collection('patients')
@@ -73,7 +72,7 @@ async function getFSSession(phone) {
     return fresh;
   }
   const data = snap.data() || {};
-  data.phone = phone; // 防舊資料污染
+  data.phone = phone;
   return data;
 }
 async function saveFSSession(session) {
@@ -134,18 +133,17 @@ function renderProfile(p) {
 
 // --- 匯出：主處理器 ---
 // args: { req, res, from, msg, onComplete({ phone, patientId, name }), advanceNext() }
+// 回傳：Promise<string> 供外層 twiml.message(...) 使用
 async function handleNameInput(args) {
-  const { req, res, from, msg, onComplete, advanceNext } = args;
-  const twiml = new MessagingResponse();
+  const { req, from, msg, onComplete, advanceNext } = args;
 
+  // 來源
   const rawFrom = from || (req.body.From ?? req.body.FromNumber ?? '').toString();
   const phone = rawFrom.replace(/^whatsapp:/i, '').trim();
   const body  = (msg ?? req.body.Body ?? '').toString().trim();
 
   if (!phone) {
-    twiml.message('系統未能識別你的電話號碼，請透過 WhatsApp 連結重新進入。');
-    res.type('text/xml').send(twiml.toString());
-    return { replied: true, advance: false };
+    return '系統未能識別你的電話號碼，請透過 WhatsApp 連結重新進入。';
   }
 
   try {
@@ -160,15 +158,11 @@ async function handleNameInput(args) {
         session.state = 'ADD_NAME';
         session.temp = {};
         await saveFSSession(session);
-        twiml.message('首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return '首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）';
       } else {
         session.state = 'MENU';
         await saveFSSession(session);
-        twiml.message(renderMenu(patients));
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return renderMenu(patients);
       }
     }
 
@@ -179,113 +173,87 @@ async function handleNameInput(args) {
           session.state = 'ADD_NAME';
           session.temp = {};
           await saveFSSession(session);
-          twiml.message('首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return '首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）';
         }
         if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
           if (n <= patients.length) {
             const chosen = patients[n - 1];
-            // 回傳給主流程：完成
             if (typeof onComplete === 'function') {
               onComplete({ phone, patientId: chosen.id, name: chosen.name });
             }
-            // 顯示個資 + 提示已選取，讓主流程將步驟前進到第 2 步
-            twiml.message(`${renderProfile(chosen)}\n\n✅ 已選擇此病人，將進入下一步。`);
-            res.type('text/xml').send(twiml.toString());
             if (typeof advanceNext === 'function') advanceNext();
-            return { replied: true, advance: true };
+            return `${renderProfile(chosen)}\n\n✅ 已選擇此病人，將進入下一步。`;
           }
           // 新增
           if (n === patients.length + 1) {
             if (patients.length >= 8) {
               session.state = 'DELETE_MENU';
               await saveFSSession(session);
-              twiml.message('⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients));
-              res.type('text/xml').send(twiml.toString());
-              return { replied: true, advance: false };
+              return '⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients);
             }
             session.state = 'ADD_NAME';
             session.temp = {};
             await saveFSSession(session);
-            twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
-            res.type('text/xml').send(twiml.toString());
-            return { replied: true, advance: false };
+            return '1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）';
           }
         }
         await saveFSSession(session);
-        twiml.message(renderMenu(patients));
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return renderMenu(patients);
       }
 
       case 'ADD_NAME': {
         if (isBackKey(body)) {
           session.state = 'MENU';
           await saveFSSession(session);
-          twiml.message(renderMenu(patients, patients.length === 0));
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return renderMenu(patients, patients.length === 0);
         }
         if (!body) {
-          twiml.message('請輸入有效的姓名（身份證姓名）。\n（輸入 0 回上一頁）');
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return '請輸入有效的姓名（身份證姓名）。\n（輸入 0 回上一頁）';
         }
         session.temp.name = body;
         session.state = 'ADD_GENDER';
         await saveFSSession(session);
-        twiml.message('2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 回上一頁）');
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return '2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 回上一頁）';
       }
 
       case 'ADD_GENDER': {
         if (isBackKey(body)) {
           session.state = 'ADD_NAME';
           await saveFSSession(session);
-          twiml.message('1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）');
+          return '1️⃣ 請輸入姓名（身份證姓名）。\n（輸入 0 回上一頁）';
         } else if (!isValidGender(body)) {
-          twiml.message('格式不正確。請回覆「男」或「女」。\n（輸入 0 回上一頁）');
+          return '格式不正確。請回覆「男」或「女」。\n（輸入 0 回上一頁）';
         } else {
           session.temp.gender = body;
           session.state = 'ADD_DOB';
           await saveFSSession(session);
-          twiml.message('3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 回上一頁）');
+          return '3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 回上一頁）';
         }
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
       }
 
       case 'ADD_DOB': {
         if (isBackKey(body)) {
           session.state = 'ADD_GENDER';
           await saveFSSession(session);
-          twiml.message('2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 回上一頁）');
+          return '2️⃣ 請輸入性別（回覆「男」或「女」）。\n（輸入 0 回上一頁）';
         } else if (!isValidDateYYYYMMDD(body)) {
-          twiml.message('出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（輸入 0 回上一頁）');
+          return '出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n（輸入 0 回上一頁）';
         } else {
           session.temp.birthDate = body;
           session.state = 'ADD_ID';
           await saveFSSession(session);
-          twiml.message('4️⃣ 請輸入身份證號碼：\n（輸入 0 回上一頁）');
+          return '4️⃣ 請輸入身份證號碼：\n（輸入 0 回上一頁）';
         }
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
       }
 
       case 'ADD_ID': {
         if (isBackKey(body)) {
           session.state = 'ADD_DOB';
           await saveFSSession(session);
-          twiml.message('3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 回上一頁）');
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return '3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n（輸入 0 回上一頁）';
         }
         if (!isValidId(body)) {
-          twiml.message('身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（輸入 0 回上一頁）');
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return '身份證號碼不正確，請重新輸入（至少 4 個字元）。\n（輸入 0 回上一頁）';
         }
 
         // 寫入（避免競態先確認名額）
@@ -293,9 +261,7 @@ async function handleNameInput(args) {
         if (patients.length >= 8) {
           session.state = 'DELETE_MENU';
           await saveFSSession(session);
-          twiml.message('⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients));
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return '⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients);
         }
 
         session.temp.idNumber = body;
@@ -306,23 +272,19 @@ async function handleNameInput(args) {
         session.temp = {};
         await saveFSSession(session);
 
-        // 回傳完成（把新建的病人當作選取）
         if (typeof onComplete === 'function') {
           onComplete({ phone, patientId: created.id, name: created.name });
         }
-        twiml.message(`💾 已儲存。\n\n${renderProfile(created)}\n\n✅ 已選擇此病人，將進入下一步。`);
-        res.type('text/xml').send(twiml.toString());
         if (typeof advanceNext === 'function') advanceNext();
-        return { replied: true, advance: true };
+
+        return `💾 已儲存。\n\n${renderProfile(created)}\n\n✅ 已選擇此病人，將進入下一步。`;
       }
 
       case 'DELETE_MENU': {
         if (isBackKey(body)) {
           session.state = 'MENU';
           await saveFSSession(session);
-          twiml.message(renderMenu(patients));
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return renderMenu(patients);
         }
         const n = Number(body);
         if (Number.isInteger(n) && n >= 1 && n <= patients.length) {
@@ -331,28 +293,21 @@ async function handleNameInput(args) {
           session.state = 'MENU';
           await saveFSSession(session);
           const after = await listPatients(phone);
-          twiml.message(`🗑️ 已刪除：${target.name}\n\n${renderMenu(after)}`);
-          res.type('text/xml').send(twiml.toString());
-          return { replied: true, advance: false };
+          return `🗑️ 已刪除：${target.name}\n\n${renderMenu(after)}`;
         }
-        twiml.message(renderDeleteMenu(patients));
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return renderDeleteMenu(patients);
       }
 
       default: {
         session.state = 'MENU';
         await saveFSSession(session);
-        twiml.message(renderMenu(patients, patients.length === 0));
-        res.type('text/xml').send(twiml.toString());
-        return { replied: true, advance: false };
+        return renderMenu(patients, patients.length === 0);
       }
     }
   } catch (err) {
     console.error('[name_input] error:', err && err.stack ? err.stack : err);
-    twiml.message('系統暫時忙碌，請稍後再試。');
-    res.type('text/xml').send(twiml.toString());
-    return { replied: true, advance: false };
+    return '系統暫時忙碌，請稍後再試。';
   }
 }
 
+module.exports = { handleNameInput };
