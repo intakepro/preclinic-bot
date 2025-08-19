@@ -1,13 +1,12 @@
 // modules/history.js
-// Version: 6
+// Version: 6.1
 // 介面：async handleHistory({ from, msg, patientId, patientName }) -> { text, done }
-// 說明：保留舊版流程（H_ENTRY→H_SHOW→H_FIRST→H_PMH...），
-//       Firestore 持久化，頂部顯示病人姓名＋電話末四位。
+// 修正：首次進到本模組（msg===''）或上次停在 H_DONE 時，強制重置成 H_ENTRY 再走入口，
+//      以便「已有病史 → 直接顯示摘要 + 問 1/2」；「已被清空 → 直接開始填」。
 
 'use strict';
 const admin = require('firebase-admin');
 
-// --- Firebase init (once) ---
 (function ensureFirebase() {
   if (admin.apps.length) return;
   try {
@@ -26,7 +25,6 @@ const admin = require('firebase-admin');
 })();
 const db = admin.firestore();
 
-// --- 常數（沿用舊版狀態與選項） ---
 const STATES = {
   ENTRY: 'H_ENTRY',
   SHOW_EXISTING: 'H_SHOW',
@@ -44,20 +42,16 @@ const STATES = {
   REVIEW: 'H_REVIEW',
   DONE: 'H_DONE'
 };
-const PMH_OPTIONS = [
-  '高血壓','糖尿病','心臟病','腎臟病','肝病','中風','癌症','其他','無'
-];
+const PMH_OPTIONS = ['高血壓','糖尿病','心臟病','腎臟病','肝病','中風','癌症','其他','無'];
 const YES='1', NO='2';
 
-// --- 小工具 ---
 const phoneOf = (from) => (from || '').toString().replace(/^whatsapp:/i,'').trim();
 const last4 = (p) => String(p||'').replace(/\D/g,'').slice(-4).padStart(4,'*');
 const banner = (name, phone) => `👤 病人：${name || '（未命名）'}（${last4(phone)}）`;
 const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
 
 function commaNumListToIndices(text){
-  return String(text||'').replace(/，/g,',')
-    .split(',').map(s=>s.trim()).filter(Boolean)
+  return String(text||'').replace(/，/g,',').split(',').map(s=>s.trim()).filter(Boolean)
     .map(n=>parseInt(n,10)).filter(n=>!Number.isNaN(n));
 }
 const isYesNo = (v) => v===YES || v===NO;
@@ -91,12 +85,10 @@ function renderReview(h){
 }
 
 // --- Firestore I/O ---
-// Index 的 session（用來讀 selectedPatient）
 async function readIndexSession(fromPhone){
   const s = await db.collection('sessions').doc(fromPhone).get();
   return s.exists ? s.data() : {};
 }
-// History 專用 session
 async function getHistSession(fromPhone){
   const ref = db.collection('history_sessions').doc(fromPhone);
   const s = await ref.get();
@@ -109,10 +101,8 @@ async function saveHistSession(fromPhone, patch){
   await db.collection('history_sessions').doc(fromPhone)
     .set({ ...patch, updatedAt: nowTS() }, { merge:true });
 }
-// 病人資料：users/{phone}/patients/{patientId}
 function patientRef(fromPhone, patientId){
-  return db.collection('users').doc(fromPhone)
-           .collection('patients').doc(patientId);
+  return db.collection('users').doc(fromPhone).collection('patients').doc(patientId);
 }
 async function readPatient(fromPhone, patientId){
   const s = await patientRef(fromPhone, patientId).get();
@@ -125,7 +115,6 @@ async function writeHistory(fromPhone, patientId, historyObj){
   );
 }
 
-// 針對「0」返回目前狀態提示
 function resendPromptForState(state){
   switch(state){
     case STATES.SHOW_EXISTING:  return '請輸入 1️⃣ 需要更改 或 2️⃣ 不需要，直接繼續';
@@ -145,14 +134,13 @@ function resendPromptForState(state){
   }
 }
 
-// --- 主處理器（配合 index 6.4.6） ---
+// --- 主處理器 ---
 async function handleHistory({ from, msg, patientId, patientName }) {
   const fromPhone = phoneOf(from);
   const body = (msg || '').trim();
 
   if (!fromPhone) return { text: '病史模組啟動失敗：無法識別電話號碼。', done:false };
 
-  // 若 index 未帶 patient 資訊，嘗試從 index session 讀
   if (!patientId || !patientName) {
     const idx = await readIndexSession(fromPhone);
     const sel = idx.selectedPatient || {};
@@ -163,13 +151,21 @@ async function handleHistory({ from, msg, patientId, patientName }) {
     return { text: '⚠️ 尚未選定病人，請先完成第 1 步（選擇或新增病人）。', done:false };
   }
 
-  // 讀取 history session 與 patient
+  // 讀取 session & patient
   let session = await getHistSession(fromPhone);
   const pDoc = await readPatient(fromPhone, patientId);
   const nameForBanner  = pDoc?.name  || patientName || '（未命名）';
-  const phoneForBanner = fromPhone; // 使用對話方電話末四位
+  const phoneForBanner = fromPhone;
 
-  // 特例：輸入 "0" → 重送當前狀態提示（沿用舊版習慣）
+  // ★★ 重點補丁：新一輪進來（msg===''）或上一輪停在 H_DONE/非法狀態 → 先重置為 H_ENTRY
+  const firstHit = body === '';
+  const invalid = !session.state || !String(session.state).startsWith('H_') || session.state === STATES.DONE;
+  if (firstHit || invalid) {
+    session.state = STATES.ENTRY;
+    session.buffer = {};
+    await saveHistSession(fromPhone, session);
+  }
+
   if (body === '0') {
     return { text: `${banner(nameForBanner, phoneForBanner)}\n${resendPromptForState(session.state)}`, done:false };
   }
@@ -353,7 +349,6 @@ ${renderSummary(existing)}
     if (!isYesNo(body)) return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入 1️⃣ 有 或 2️⃣ 無`, done:false };
     session.buffer.history.social.travel = (body===YES)?'有':'無';
 
-    // 寫入患者 history
     const history = session.buffer.history;
     await writeHistory(fromPhone, patientId, history);
 
@@ -376,7 +371,8 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.DONE){
-    // 交回 index 控制權（不再提示 0），保持安靜或給提示
+    // 以前這裡會造成「已完成」一直跳；現在一般不會到這裡，
+    // 若真的到這裡，也回 done:true 讓 index 往下走。
     return { text: `${banner(nameForBanner, phoneForBanner)}\n（提示）病史模組已完成。`, done:true };
   }
 
