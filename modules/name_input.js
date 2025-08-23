@@ -1,5 +1,5 @@
 // modules/name_input.js
-// Version: 7
+// Version: 7 → 7.1 (增強：更改資料時逐題顯示原值；輸入「1」保留；輸入新值覆蓋)
 // 介面：async handleNameInput({ req, from, msg }) -> { text, done }
 
 'use strict';
@@ -72,6 +72,32 @@ function renderProfile(p){
   ].join('\n');
 }
 
+/** 🔧 新增：讀取/更新病人 + 編輯提示文字 **/
+async function getPatient(phone, patientId){
+  const ref = db.collection('users').doc(phone).collection('patients').doc(patientId);
+  const s = await ref.get();
+  return s.exists ? { id: s.id, ...s.data() } : null;
+}
+async function updatePatient(phone, patientId, updates){
+  updates.updatedAt = new Date();
+  await db.collection('users').doc(phone).collection('patients').doc(patientId).set(updates, { merge:true });
+}
+function renderEditPrompt(field, originVal){
+  const labelMap = {
+    name: '姓名（身份證姓名）',
+    gender: '性別（回覆「男」或「女」）',
+    birthDate: '出生日期（YYYY-MM-DD）',
+    idNumber: '身份證號碼'
+  };
+  const safe = (originVal ?? '').toString() || '（無資料）';
+  return [
+    `請輸入新的${labelMap[field]}：`,
+    `（輸入「1」可保留原值：${safe}）`,
+    '0️⃣ 返回上一題'
+  ].join('\n');
+}
+
+// 使用者/病人/Session（原樣保留）
 async function ensureAccount(phone){
   const ref = db.collection('users').doc(phone);
   const s = await ref.get();
@@ -102,7 +128,7 @@ async function deletePatient(phone, id){
   await db.collection('users').doc(phone).collection('patients').doc(id).delete();
 }
 
-// 專用 session
+// 專用 session（原樣保留）
 async function getFSSession(phone){
   const ref = db.collection('sessions').doc(phone);
   const s = await ref.get();
@@ -220,14 +246,116 @@ async function handleNameInput({ req, from, msg }) {
           return { text: '✅ 已確認，進入下一步。', done:true };
         }
         if (body === '2') {
-          session.state = 'ADD_NAME';
-          session.temp = {};
+          // 🆕 進入逐題顯示原值的更改流程
+          const pid = session.temp?.pickedId;
+          const current = pid ? await getPatient(phone, pid) : null;
+          if (!current) {
+            session.state = 'MENU';
+            await saveFSSession(session);
+            return { text:'未能讀取病人資料，請重新選擇。', done:false };
+          }
+          session.state = 'EDIT_NAME';
+          session.temp = {
+            pickedId: pid,
+            editOrig: {
+              name: current.name || '',
+              gender: current.gender || '',
+              birthDate: current.birthDate || '',
+              idNumber: current.idNumber || ''
+            },
+            editNew: {}
+          };
           await saveFSSession(session);
-          return { text:'請輸入新的姓名（身份證姓名）。\n0️⃣ 返回上一題', done:false };
+          return { text: renderEditPrompt('name', current.name), done:false };
         }
         return { text:'請輸入 1（下一步）或 2（更改），或 0 返回上一題。', done:false };
       }
 
+      /** 🆕 逐題顯示原值的更改流程 **/
+      case 'EDIT_NAME': {
+        if (isBackKey(body)) {
+          session.state = 'AFTER_PICK';
+          await saveFSSession(session);
+          return { text:'已返回。請輸入 1（進入下一步）或 2（更改此病人資料），或 0 返回上一題。', done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.name : body;
+        if (!val || val.trim().length === 0) {
+          return { text:'姓名不能為空。請重新輸入。\n' + renderEditPrompt('name', session.temp.editOrig.name), done:false };
+        }
+        session.temp.editNew.name = val.trim();
+        session.state = 'EDIT_GENDER';
+        await saveFSSession(session);
+        return { text: renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
+      }
+      case 'EDIT_GENDER': {
+        if (isBackKey(body)) {
+          session.state = 'EDIT_NAME';
+          await saveFSSession(session);
+          return { text: renderEditPrompt('name', session.temp.editOrig.name), done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.gender : body;
+        if (!isValidGender(val)) {
+          return { text:'格式不正確。請回覆「男」或「女」。\n' + renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
+        }
+        session.temp.editNew.gender = val;
+        session.state = 'EDIT_DOB';
+        await saveFSSession(session);
+        return { text: renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
+      }
+      case 'EDIT_DOB': {
+        if (isBackKey(body)) {
+          session.state = 'EDIT_GENDER';
+          await saveFSSession(session);
+          return { text: renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.birthDate : body;
+        if (!isValidDateYYYYMMDD(val)) {
+          return { text:'出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n' + renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
+        }
+        session.temp.editNew.birthDate = val;
+        session.state = 'EDIT_ID';
+        await saveFSSession(session);
+        return { text: renderEditPrompt('idNumber', session.temp.editOrig.idNumber), done:false };
+      }
+      case 'EDIT_ID': {
+        if (isBackKey(body)) {
+          session.state = 'EDIT_DOB';
+          await saveFSSession(session);
+          return { text: renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.idNumber : body;
+        if (!isValidId(val)) {
+          return { text:'身份證號碼不正確，請重新輸入（至少 4 個字元）。\n' + renderEditPrompt('idNumber', session.temp.editOrig.idNumber), done:false };
+        }
+        session.temp.editNew.idNumber = val;
+
+        // 寫回 Firestore
+        const updates = {
+          name: session.temp.editNew.name,
+          gender: session.temp.editNew.gender,
+          birthDate: session.temp.editNew.birthDate,
+          idNumber: session.temp.editNew.idNumber
+        };
+        await updatePatient(phone, session.temp.pickedId, updates);
+
+        // 讀回最新資料供顯示
+        const updated = await getPatient(phone, session.temp.pickedId);
+
+        // 設為選定病人（保持原行為）
+        await db.collection('sessions').doc(phone).set({
+          selectedPatient: { patientId: updated.id, name: updated.name }
+        }, { merge:true });
+
+        // 返回 AFTER_PICK：讓使用者可進入下一步或再次更改
+        session.state = 'AFTER_PICK';
+        session.temp = { pickedId: updated.id };
+        await saveFSSession(session);
+
+        const text = `${renderProfile(updated)}\n\n請確認下一步動作：\n1️⃣ 進入下一步\n2️⃣ 更改此病人資料\n0️⃣ 返回上一題`;
+        return { text, done:false };
+      }
+
+      // === 以下為原本新增流程（不變） ===
       case 'ADD_NAME': {
         if (isBackKey(body)) {
           session.state = 'MENU';
