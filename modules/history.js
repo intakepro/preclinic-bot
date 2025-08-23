@@ -1,9 +1,6 @@
-// modules/history.js
-// Version: 7
-// 介面：async handleHistory({ from, msg, patientId, patientName }) -> { text, done }
-// 說明：保留舊版流程；所有問題底部加入「0️⃣ 返回上一題」；
-//      吸煙/飲酒改為選項（吸煙：1有/2無/3已戒；飲酒：1每天/2偶爾/3無）；
-//      首次呼叫(msg==='')或上次停在 H_DONE 會重置回入口。
+/ modules/name_input.js
+// Version: 7.1 (Aug-2025)
+// 變更：在更改病人資料時，逐題顯示「原有答案」；輸入「1」保留原值、或直接輸入新值覆蓋。
 
 'use strict';
 const admin = require('firebase-admin');
@@ -14,431 +11,448 @@ const admin = require('firebase-admin');
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
       admin.initializeApp({ credential: admin.credential.cert(sa) });
-      console.log('[history] Firebase via FIREBASE_SERVICE_ACCOUNT');
+      console.log('[name_input] Firebase via FIREBASE_SERVICE_ACCOUNT');
     } else {
       admin.initializeApp();
-      console.log('[history] Firebase via default credentials');
+      console.log('[name_input] Firebase via default credentials');
     }
   } catch (e) {
-    console.error('[history] Firebase init error:', e?.message || e);
+    console.error('[name_input] Firebase init error:', e?.message || e);
     throw e;
   }
 })();
 const db = admin.firestore();
 
-const STATES = {
-  ENTRY: 'H_ENTRY',
-  SHOW_EXISTING: 'H_SHOW',
-  FIRST_NOTICE: 'H_FIRST',
-  PMH_SELECT: 'H_PMH',
-  PMH_OTHER_INPUT: 'H_PMH_OTHER',
-  MEDS_YN: 'H_MEDS_YN',
-  MEDS_INPUT: 'H_MEDS_IN',
-  ALLERGY_YN: 'H_ALG_YN',
-  ALLERGY_TYPE: 'H_ALG_T',
-  ALLERGY_INPUT: 'H_ALG_IN',
-  SOCIAL_SMOKE: 'H_SOC_SMK',
-  SOCIAL_ALCOHOL: 'H_SOC_ALC',
-  SOCIAL_TRAVEL: 'H_SOC_TRV',
-  REVIEW: 'H_REVIEW',
-  DONE: 'H_DONE'
-};
-const PMH_OPTIONS = ['高血壓','糖尿病','心臟病','腎臟病','肝病','中風','癌症','其他','無'];
-const YES='1', NO='2';
+const phoneOf = (from) => (from || '').toString().replace(/^whatsapp:/i, '').trim();
 
-const phoneOf = (from) => (from || '').toString().replace(/^whatsapp:/i,'').trim();
-const last4 = (p) => String(p||'').replace(/\D/g,'').slice(-4).padStart(4,'*');
-const banner = (name, phone) => `👤 病人：${name || '（未命名）'}（${last4(phone)}）`;
-const nowTS = () => admin.firestore.FieldValue.serverTimestamp();
+function isValidGender(t) { return t === '男' || t === '女'; }
+function isValidDateYYYYMMDD(t) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false;
+  const [y,m,d] = t.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  return dt.getUTCFullYear()===y && (dt.getUTCMonth()+1)===m && dt.getUTCDate()===d;
+}
+function isValidId(t) { return typeof t === 'string' && t.trim().length >= 4; }
+function isBackKey(t) { return (t || '').trim() === '0'; }
 
-function commaNumListToIndices(text){
-  return String(text||'').replace(/，/g,',')
-    .split(',').map(s=>s.trim()).filter(Boolean)
-    .map(n=>parseInt(n,10)).filter(n=>!Number.isNaN(n));
+function renderMenu(patients, firstTime=false) {
+  const lines = [];
+  lines.push('👉 第 1 步：輸入病人名字模組');
+  if (firstTime || patients.length===0) {
+    lines.push('此電話尚未有病人資料。請先新增（姓名→性別→出生日期→身份證）。');
+    lines.push('');
+    lines.push('回覆「1」開始新增。');
+    lines.push('0️⃣ 返回上一題');
+    return lines.join('\n');
+  }
+  lines.push('請選擇病人，或新增其他病人：');
+  patients.forEach((p,i)=>lines.push(`${i+1}. ${p.name}`));
+  lines.push(`${patients.length+1}. ➕ 新增病人`);
+  lines.push('');
+  lines.push('請回覆編號（例如：1）。');
+  lines.push('0️⃣ 返回上一題');
+  return lines.join('\n');
 }
-const isYesNo = (v) => v===YES || v===NO;
-const fmtList = (arr) => (Array.isArray(arr)&&arr.length)?arr.join('、'):'無';
-
-function initHistory(){
-  return { pmh:[], meds:[], allergies:{ types:[], items:[] }, social:{ smoking:'', alcohol:'', travel:'' } };
+function renderDeleteMenu(patients){
+  const lines = [];
+  lines.push('📦 已達 8 人上限，請選擇要刪除的一位：');
+  patients.forEach((p,i)=>lines.push(`${i+1}. ${p.name}`));
+  lines.push('');
+  lines.push('回覆對應編號刪除。');
+  lines.push('0️⃣ 返回上一題');
+  return lines.join('\n');
 }
-function renderPMHMenu(){
-  return (
-    '請選擇您曾經患有的疾病（可複選，用逗號分隔數字）：\n' +
-    PMH_OPTIONS.map((t,i)=>`${i+1}️⃣ ${t}`).join('\n') +
-    '\n0️⃣ 返回上一題'
-  );
-}
-function renderSummary(h){
-  const pmh = fmtList(h.pmh||[]);
-  const meds = fmtList(h.meds||[]);
-  const alTypes = fmtList(h.allergies?.types||[]);
-  const alItems = fmtList(h.allergies?.items||[]);
-  const smoking = h.social?.smoking || '未填';
-  const alcohol = h.social?.alcohol || '未填';
-  const travel  = h.social?.travel  || '未填';
+function renderProfile(p){
   return [
-    `- 過去病史：${pmh}`,
-    `- 服用藥物：${meds}`,
-    `- 過敏類型：${alTypes}`,
-    `- 過敏明細：${alItems}`,
-    `- 吸菸：${smoking}；飲酒：${alcohol}；近期出國：${travel}`
+    '📄 病人個人資料',
+    `姓名：${p.name}`,
+    `性別：${p.gender}`,
+    `出生日期：${p.birthDate}`,
+    `身份證號碼：${p.idNumber}`
   ].join('\n');
 }
-function renderReview(h){
-  return (
-    `感謝您提供病史資料 🙏\n以下是您剛填寫的內容：\n${renderSummary(h)}\n\n` +
-    '請問需要更改嗎？\n1️⃣ 需要更改\n2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題'
-  );
-}
 
-async function readIndexSession(fromPhone){
-  const s = await db.collection('sessions').doc(fromPhone).get();
-  return s.exists ? s.data() : {};
-}
-async function getHistSession(fromPhone){
-  const ref = db.collection('history_sessions').doc(fromPhone);
+// === 新增：讀取/更新單一病人、與編輯提示 ===
+async function getPatient(phone, patientId){
+  const ref = db.collection('users').doc(phone).collection('patients').doc(patientId);
   const s = await ref.get();
-  if (s.exists) return s.data();
-  const fresh = { state: STATES.ENTRY, buffer:{}, updatedAt: nowTS() };
-  await ref.set(fresh);
-  return fresh;
+  return s.exists ? { id: s.id, ...s.data() } : null;
 }
-async function saveHistSession(fromPhone, patch){
-  await db.collection('history_sessions').doc(fromPhone)
-    .set({ ...patch, updatedAt: nowTS() }, { merge:true });
+async function updatePatient(phone, patientId, updates){
+  updates.updatedAt = new Date();
+  await db.collection('users').doc(phone).collection('patients').doc(patientId).set(updates, { merge:true });
 }
-function patientRef(fromPhone, patientId){
-  return db.collection('users').doc(fromPhone)
-           .collection('patients').doc(patientId);
-}
-async function readPatient(fromPhone, patientId){
-  const s = await patientRef(fromPhone, patientId).get();
-  return s.exists ? { id: patientId, ...s.data() } : null;
-}
-async function writeHistory(fromPhone, patientId, historyObj){
-  await patientRef(fromPhone, patientId).set(
-    { history: historyObj, updatedAt: nowTS() },
-    { merge: true }
-  );
-}
-
-// 定義各狀態的「上一題」
-const PREV = {
-  [STATES.SHOW_EXISTING]: STATES.ENTRY,
-  [STATES.FIRST_NOTICE]: STATES.ENTRY,
-  [STATES.PMH_SELECT]: STATES.FIRST_NOTICE,
-  [STATES.PMH_OTHER_INPUT]: STATES.PMH_SELECT,
-  [STATES.MEDS_YN]: STATES.PMH_SELECT,
-  [STATES.MEDS_INPUT]: STATES.MEDS_YN,
-  [STATES.ALLERGY_YN]: STATES.MEDS_YN,
-  [STATES.ALLERGY_TYPE]: STATES.ALLERGY_YN,
-  [STATES.ALLERGY_INPUT]: STATES.ALLERGY_TYPE,
-  [STATES.SOCIAL_SMOKE]: STATES.ALLERGY_YN,
-  [STATES.SOCIAL_ALCOHOL]: STATES.SOCIAL_SMOKE,
-  [STATES.SOCIAL_TRAVEL]: STATES.SOCIAL_ALCOHOL,
-  [STATES.REVIEW]: STATES.SOCIAL_TRAVEL
-};
-function backState(s){ return PREV[s] || STATES.ENTRY; }
-
-function promptSmoke(){
-  return (
-    '吸菸情況：\n' +
-    '1️⃣ 有\n' +
-    '2️⃣ 無\n' +
-    '3️⃣ 已戒\n' +
+function renderEditPrompt(field, originVal){
+  const labelMap = {
+    name: '姓名（身份證姓名）',
+    gender: '性別（回覆「男」或「女」）',
+    birthDate: '出生日期（YYYY-MM-DD）',
+    idNumber: '身份證號碼'
+  };
+  const safe = (originVal ?? '').toString() || '（無資料）';
+  return [
+    `請輸入新的${labelMap[field]}：`,
+    `（輸入「1」可保留原值：${safe}）`,
     '0️⃣ 返回上一題'
-  );
-}
-function promptAlcohol(){
-  return (
-    '飲酒情況：\n' +
-    '1️⃣ 每天\n' +
-    '2️⃣ 偶爾\n' +
-    '3️⃣ 無\n' +
-    '0️⃣ 返回上一題'
-  );
-}
-function promptTravel(){
-  return (
-    '最近三個月是否出國旅行？\n' +
-    '1️⃣ 有\n' +
-    '2️⃣ 無\n' +
-    '0️⃣ 返回上一題'
-  );
-}
-function promptAllergyYN(){
-  return '是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題';
-}
-function promptMedsYN(){
-  return '您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有\n0️⃣ 返回上一題';
+  ].join('\n');
 }
 
-function resendPromptForState(state){
-  switch(state){
-    case STATES.SHOW_EXISTING:  return '請輸入 1️⃣ 需要更改 或 2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題';
-    case STATES.FIRST_NOTICE:   return '請輸入 1️⃣ 繼續\n0️⃣ 返回上一題';
-    case STATES.PMH_SELECT:     return renderPMHMenu();
-    case STATES.PMH_OTHER_INPUT:return '請輸入「其他」的具體病名（可多個，以逗號或頓號分隔）\n0️⃣ 返回上一題';
-    case STATES.MEDS_YN:        return promptMedsYN();
-    case STATES.MEDS_INPUT:     return '請輸入正在服用的藥物名稱（可多個，以逗號或頓號分隔）\n0️⃣ 返回上一題';
-    case STATES.ALLERGY_YN:     return promptAllergyYN();
-    case STATES.ALLERGY_TYPE:   return '過敏類型（可複選，用逗號分隔）：\n1️⃣ 藥物\n2️⃣ 食物\n3️⃣ 其他\n0️⃣ 返回上一題';
-    case STATES.ALLERGY_INPUT:  return '請輸入過敏項目（例如：青黴素、花生…；可多個，用逗號或頓號分隔）\n0️⃣ 返回上一題';
-    case STATES.SOCIAL_SMOKE:   return promptSmoke();
-    case STATES.SOCIAL_ALCOHOL: return promptAlcohol();
-    case STATES.SOCIAL_TRAVEL:  return promptTravel();
-    case STATES.REVIEW:         return '請輸入 1️⃣ 需要更改 或 2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題';
-    default:                    return '請依畫面輸入對應選項。';
+// === 與原版相同：使用者、病人與 session 存取 ===
+async function ensureAccount(phone){
+  const ref = db.collection('users').doc(phone);
+  const s = await ref.get();
+  const now = new Date();
+  if (!s.exists) await ref.set({ phone, createdAt: now, updatedAt: now });
+  else await ref.set({ updatedAt: now }, { merge: true });
+}
+async function listPatients(phone){
+  const snap = await db.collection('users').doc(phone).collection('patients')
+    .orderBy('createdAt','asc').get();
+  const out=[]; snap.forEach(d=>out.push({ id:d.id, ...d.data() }));
+  return out.slice(0,8);
+}
+async function addPatient(phone, data){
+  const col = db.collection('users').doc(phone).collection('patients');
+  const now = new Date();
+  const payload = {
+    name: data.name,
+    gender: data.gender,
+    birthDate: data.birthDate,
+    idNumber: data.idNumber,
+    createdAt: now, updatedAt: now
+  };
+  const ref = await col.add(payload);
+  return { id: ref.id, ...payload };
+}
+async function deletePatient(phone, id){
+  await db.collection('users').doc(phone).collection('patients').doc(id).delete();
+}
+
+// 專用 session
+async function getFSSession(phone){
+  const ref = db.collection('sessions').doc(phone);
+  const s = await ref.get();
+  if (!s.exists) {
+    const fresh = { phone, module:'name_input', state:'INIT', temp:{}, updatedAt:new Date() };
+    await ref.set(fresh);
+    return fresh;
+  }
+  const data = s.data() || {};
+  data.phone = phone;
+  return data;
+}
+async function saveFSSession(session){
+  session.updatedAt = new Date();
+  await db.collection('sessions').doc(session.phone).set(session, { merge:true });
+}
+
+async function handleNameInput({ req, from, msg }) {
+  const rawFrom = from || (req?.body?.From ?? '').toString();
+  const phone = phoneOf(rawFrom);
+  const body  = (msg ?? req?.body?.Body ?? '').toString().trim();
+
+  if (!phone) return { text:'系統未能識別你的電話號碼，請透過 WhatsApp 連結重新進入。', done:false };
+
+  try {
+    if (!body) {
+      await ensureAccount(phone);
+      let session = await getFSSession(phone);
+      let patients = await listPatients(phone);
+
+      if (session.state === 'INIT' || patients.length === 0) {
+        session.state = 'ADD_NAME';
+        session.temp = {};
+        await saveFSSession(session);
+        return { text: '👉 第 1 步：輸入病人名字模組\n\n1️⃣ 請輸入姓名（身份證姓名）。\n0️⃣ 返回上一題', done: false };
+      }
+      session.state = 'MENU';
+      await saveFSSession(session);
+      return { text: renderMenu(patients), done: false };
+    }
+
+    await ensureAccount(phone);
+    let session = await getFSSession(phone);
+    session.module = 'name_input';
+    let patients = await listPatients(phone);
+
+    if (session.state === 'INIT') {
+      if (patients.length === 0) {
+        session.state = 'ADD_NAME';
+        session.temp = {};
+        await saveFSSession(session);
+        return { text:'首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n0️⃣ 返回上一題', done:false };
+      } else {
+        session.state = 'MENU';
+        await saveFSSession(session);
+        return { text: renderMenu(patients), done:false };
+      }
+    }
+
+    switch (session.state) {
+      case 'MENU': {
+        if (isBackKey(body)) {
+          return { text: renderMenu(patients, patients.length===0), done:false };
+        }
+        const n = Number(body);
+        if (patients.length === 0) {
+          session.state = 'ADD_NAME';
+          session.temp = {};
+          await saveFSSession(session);
+          return { text:'首次使用：請輸入個人資料。\n\n1️⃣ 請輸入姓名（身份證姓名）。\n0️⃣ 返回上一題', done:false };
+        }
+        if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
+          if (n <= patients.length) {
+            const chosen = patients[n - 1];
+            // 把選定病人寫回 index 的 sessions（selectedPatient）
+            await db.collection('sessions').doc(phone).set({
+              selectedPatient: { patientId: chosen.id, name: chosen.name }
+            }, { merge:true });
+            // 回兩段合併在一則訊息內：個資 + 下一步/更改
+            const text =
+              `${renderProfile(chosen)}\n\n` +
+              '請確認下一步動作：\n' +
+              '1️⃣ 進入下一步\n' +
+              '2️⃣ 更改此病人資料\n' +
+              '0️⃣ 返回上一題';
+            session.state = 'AFTER_PICK';
+            session.temp = { pickedId: chosen.id };
+            await saveFSSession(session);
+            return { text, done:false };
+          }
+          if (n === patients.length + 1) {
+            if (patients.length >= 8) {
+              session.state = 'DELETE_MENU';
+              await saveFSSession(session);
+              return { text:'⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients), done:false };
+            }
+            session.state = 'ADD_NAME';
+            session.temp = {};
+            await saveFSSession(session);
+            return { text:'1️⃣ 請輸入姓名（身份證姓名）。\n0️⃣ 返回上一題', done:false };
+          }
+        }
+        await saveFSSession(session);
+        return { text: renderMenu(patients), done:false };
+      }
+
+      case 'AFTER_PICK': {
+        if (isBackKey(body)) {
+          session.state = 'MENU';
+          await saveFSSession(session);
+          return { text: renderMenu(patients), done:false };
+        }
+        if (body === '1') {
+          return { text: '✅ 已確認，進入下一步。', done:true };
+        }
+        if (body === '2') {
+          // 進入逐題顯示原值的更改流程
+          const pid = session.temp?.pickedId;
+          const current = pid ? await getPatient(phone, pid) : null;
+          if (!current) {
+            session.state = 'MENU';
+            await saveFSSession(session);
+            return { text:'未能讀取病人資料，請重新選擇。', done:false };
+          }
+          session.state = 'EDIT_NAME';
+          session.temp = {
+            pickedId: pid,
+            editOrig: {
+              name: current.name || '',
+              gender: current.gender || '',
+              birthDate: current.birthDate || '',
+              idNumber: current.idNumber || ''
+            },
+            editNew: {},
+          };
+          await saveFSSession(session);
+          return { text: renderEditPrompt('name', current.name), done:false };
+        }
+        return { text:'請輸入 1（下一步）或 2（更改），或 0 返回上一題。', done:false };
+      }
+
+      // === 新增：逐題顯示原值的更改流程 ===
+      case 'EDIT_NAME': {
+        if (isBackKey(body)) {
+          session.state = 'AFTER_PICK';
+          await saveFSSession(session);
+          return { text:'已返回。請輸入 1（進入下一步）或 2（更改此病人資料），或 0 返回上一題。', done:false };
+        }
+        const val = body === '1' ? session.temp.editOrig.name : body;
+        if (!val || val.trim().length === 0) {
+          return { text:'姓名不能為空。請重新輸入。\n' + renderEditPrompt('name', session.temp.editOrig.name), done:false };
+        }
+        session.temp.editNew.name = val.trim();
+        session.state = 'EDIT_GENDER';
+        await saveFSSession(session);
+        return { text: renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
+      }
+      case 'EDIT_GENDER': {
+        if (isBackKey(body)) {
+          session.state = 'EDIT_NAME';
+          await saveFSSession(session);
+          return { text: renderEditPrompt('name', session.temp.editOrig.name), done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.gender : body;
+        if (!isValidGender(val)) {
+          return { text:'格式不正確。請回覆「男」或「女」。\n' + renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
+        }
+        session.temp.editNew.gender = val;
+        session.state = 'EDIT_DOB';
+        await saveFSSession(session);
+        return { text: renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
+      }
+      case 'EDIT_DOB': {
+        if (isBackKey(body)) {
+          session.state = 'EDIT_GENDER';
+          await saveFSSession(session);
+          return { text: renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.birthDate : body;
+        if (!isValidDateYYYYMMDD(val)) {
+          return { text:'出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n' + renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
+        }
+        session.temp.editNew.birthDate = val;
+        session.state = 'EDIT_ID';
+        await saveFSSession(session);
+        return { text: renderEditPrompt('idNumber', session.temp.editOrig.idNumber), done:false };
+      }
+      case 'EDIT_ID': {
+        if (isBackKey(body)) {
+          session.state = 'EDIT_DOB';
+          await saveFSSession(session);
+          return { text: renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
+        }
+        const val = (body === '1') ? session.temp.editOrig.idNumber : body;
+        if (!isValidId(val)) {
+          return { text:'身份證號碼不正確，請重新輸入（至少 4 個字元）。\n' + renderEditPrompt('idNumber', session.temp.editOrig.idNumber), done:false };
+        }
+        session.temp.editNew.idNumber = val;
+
+        // 寫回 Firestore
+        const updates = {
+          name: session.temp.editNew.name,
+          gender: session.temp.editNew.gender,
+          birthDate: session.temp.editNew.birthDate,
+          idNumber: session.temp.editNew.idNumber
+        };
+        await updatePatient(phone, session.temp.pickedId, updates);
+
+        // 讀一次最新資料，顯示確認畫面
+        const updated = await getPatient(phone, session.temp.pickedId);
+
+        // 設為選定病人（與原本行為一致）
+        await db.collection('sessions').doc(phone).set({
+          selectedPatient: { patientId: updated.id, name: updated.name }
+        }, { merge:true });
+
+        // 返回 AFTER_PICK 狀態，讓使用者可以繼續下一步或再次更改
+        session.state = 'AFTER_PICK';
+        session.temp = { pickedId: updated.id };
+        await saveFSSession(session);
+
+        const text = `${renderProfile(updated)}\n\n請確認下一步動作：\n1️⃣ 進入下一步\n2️⃣ 更改此病人資料\n0️⃣ 返回上一題`;
+        return { text, done:false };
+      }
+
+      // === 原本新增流程 ===
+      case 'ADD_NAME': {
+        if (isBackKey(body)) {
+          session.state = 'MENU';
+          await saveFSSession(session);
+          return { text: renderMenu(patients, patients.length===0), done:false };
+        }
+        if (!body) return { text:'請輸入有效的姓名（身份證姓名）。\n0️⃣ 返回上一題', done:false };
+        session.temp.name = body;
+        session.state = 'ADD_GENDER';
+        await saveFSSession(session);
+        return { text:'2️⃣ 請輸入性別（回覆「男」或「女」）。\n0️⃣ 返回上一題', done:false };
+      }
+
+      case 'ADD_GENDER': {
+        if (isBackKey(body)) {
+          session.state = 'ADD_NAME';
+          await saveFSSession(session);
+          return { text:'1️⃣ 請輸入姓名（身份證姓名）。\n0️⃣ 返回上一題', done:false };
+        }
+        if (!isValidGender(body)) return { text:'格式不正確。請回覆「男」或「女」。\n0️⃣ 返回上一題', done:false };
+        session.temp.gender = body;
+        session.state = 'ADD_DOB';
+        await saveFSSession(session);
+        return { text:'3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n0️⃣ 返回上一題', done:false };
+      }
+
+      case 'ADD_DOB': {
+        if (isBackKey(body)) {
+          session.state = 'ADD_GENDER';
+          await saveFSSession(session);
+          return { text:'2️⃣ 請輸入性別（回覆「男」或「女」）。\n0️⃣ 返回上一題', done:false };
+        }
+        if (!isValidDateYYYYMMDD(body)) return { text:'出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n0️⃣ 返回上一題', done:false };
+        session.temp.birthDate = body;
+        session.state = 'ADD_ID';
+        await saveFSSession(session);
+        return { text:'4️⃣ 請輸入身份證號碼：\n0️⃣ 返回上一題', done:false };
+      }
+
+      case 'ADD_ID': {
+        if (isBackKey(body)) {
+          session.state = 'ADD_DOB';
+          await saveFSSession(session);
+          return { text:'3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。\n0️⃣ 返回上一題', done:false };
+        }
+        if (!isValidId(body)) return { text:'身份證號碼不正確，請重新輸入（至少 4 個字元）。\n0️⃣ 返回上一題', done:false };
+
+        patients = await listPatients(phone);
+        if (patients.length >= 8) {
+          session.state = 'DELETE_MENU';
+          await saveFSSession(session);
+          return { text:'⚠️ 已達 8 人上限，無法新增。\n\n' + renderDeleteMenu(patients), done:false };
+        }
+
+        session.temp.idNumber = body;
+        const created = await addPatient(phone, session.temp);
+
+        // 設為選定病人
+        await db.collection('sessions').doc(phone).set({
+          selectedPatient: { patientId: created.id, name: created.name }
+        }, { merge:true });
+
+        session.state = 'AFTER_PICK';
+        session.temp = { pickedId: created.id };
+        await saveFSSession(session);
+
+        const text = `${renderProfile(created)}\n\n請確認下一步動作：\n1️⃣ 進入下一步\n2️⃣ 更改此病人資料\n0️⃣ 返回上一題`;
+        return { text, done:false };
+      }
+
+      case 'DELETE_MENU': {
+        if (isBackKey(body)) {
+          session.state = 'MENU';
+          await saveFSSession(session);
+          return { text: renderMenu(patients), done:false };
+        }
+        const n = Number(body);
+        if (Number.isInteger(n) && n >=1 && n <= patients.length) {
+          const target = patients[n-1];
+          await deletePatient(phone, target.id);
+          session.state = 'MENU';
+          await saveFSSession(session);
+          const after = await listPatients(phone);
+          return { text:`🗑️ 已刪除：${target.name}\n\n${renderMenu(after)}`, done:false };
+        }
+        return { text: renderDeleteMenu(patients), done:false };
+      }
+
+      default: {
+        session.state = 'MENU';
+        await saveFSSession(session);
+        return { text: renderMenu(patients, patients.length===0), done:false };
+      }
+    }
+  } catch (err) {
+    console.error('[name_input] error:', err?.stack || err);
+    return { text:'系統暫時忙碌，請稍後再試。', done:false };
   }
 }
 
-// --- 主處理器 ---
-async function handleHistory({ from, msg, patientId, patientName }) {
-  const fromPhone = phoneOf(from);
-  const body = (msg || '').trim();
-
-  if (!fromPhone) return { text: '病史模組啟動失敗：無法識別電話號碼。', done:false };
-
-  if (!patientId || !patientName) {
-    const idx = await readIndexSession(fromPhone);
-    const sel = idx.selectedPatient || {};
-    patientId   = patientId   || sel.patientId;
-    patientName = patientName || sel.name;
-  }
-  if (!patientId) {
-    return { text: '⚠️ 尚未選定病人，請先完成第 1 步（選擇或新增病人）。\n0️⃣ 返回上一題', done:false };
-  }
-
-  let session = await getHistSession(fromPhone);
-  const pDoc = await readPatient(fromPhone, patientId);
-  const nameForBanner  = pDoc?.name  || patientName || '（未命名）';
-  const phoneForBanner = fromPhone;
-
-  // 首次呼叫或上次停在 DONE/非法 → 重置入口
-  const firstHit = body === '';
-  const invalid = !session.state || !String(session.state).startsWith('H_') || session.state === STATES.DONE;
-  if (firstHit || invalid) {
-    session.state = STATES.ENTRY;
-    session.buffer = {};
-    await saveHistSession(fromPhone, session);
-  }
-
-  // 0️⃣ 返回上一題
-  if (body === '0') {
-    const prev = backState(session.state);
-    session.state = prev;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${resendPromptForState(prev)}`, done:false };
-  }
-
-  const existing = pDoc?.history || null;
-
-  // 入口
-  if (session.state === STATES.ENTRY){
-    if (existing){
-      session.state = STATES.SHOW_EXISTING;
-      await saveHistSession(fromPhone, session);
-      return {
-        text:
-`${banner(nameForBanner, phoneForBanner)}
-您之前輸入的病史資料如下：
-${renderSummary(existing)}
-
-請問需要更改嗎？
-1️⃣ 需要更改
-2️⃣ 不需要，直接繼續
-0️⃣ 返回上一題`,
-        done:false
-      };
-    }
-    session.state = STATES.FIRST_NOTICE;
-    await saveHistSession(fromPhone, session);
-    return {
-      text:
-`${banner(nameForBanner, phoneForBanner)}
-由於您第一次使用這個電話號碼進行預先問診，
-我們需要花大約 2–3 分鐘收集您的基本病史資料。
-
-請輸入 1️⃣ 繼續
-0️⃣ 返回上一題`,
-      done:false
-    };
-  }
-
-  if (session.state === STATES.SHOW_EXISTING){
-    if (!isYesNo(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入 1️⃣ 更改 或 2️⃣ 下一步\n0️⃣ 返回上一題`, done:false };
-    if (body === YES){
-      session.state = STATES.PMH_SELECT;
-      session.buffer = { history: initHistory() };
-      await saveHistSession(fromPhone, session);
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${renderPMHMenu()}`, done:false };
-    }
-    session.state = STATES.DONE;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n✅ 病史已確認無需更改，將為您進入下一個模組。`, done:true };
-  }
-
-  if (session.state === STATES.FIRST_NOTICE){
-    if (body !== YES)
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入 1️⃣ 繼續\n0️⃣ 返回上一題`, done:false };
-    session.state = STATES.PMH_SELECT;
-    session.buffer = { history: initHistory() };
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${renderPMHMenu()}`, done:false };
-  }
-
-  // PMH
-  if (session.state === STATES.PMH_SELECT){
-    const idxs = commaNumListToIndices(body);
-    if (!idxs.length || !idxs.every(n=>n>=1 && n<=PMH_OPTIONS.length)){
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n格式不正確，請以逗號分隔數字，例如：1,2 或 1,3,7\n\n${renderPMHMenu()}`, done:false };
-    }
-    const names = [];
-    let needOther = false, isNone = false;
-    for (const n of idxs){
-      if (n===8) needOther = true;
-      if (n===9) isNone = true;
-      names.push(PMH_OPTIONS[n-1]);
-    }
-    if (isNone) session.buffer.history.pmh = [];
-    else session.buffer.history.pmh = names.filter(x=>x!=='其他' && x!=='無');
-
-    if (needOther && !isNone){
-      session.state = STATES.PMH_OTHER_INPUT;
-      await saveHistSession(fromPhone, session);
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入「其他」的具體病名（可多個，以逗號或頓號分隔）\n0️⃣ 返回上一題`, done:false };
-    }
-    session.state = STATES.MEDS_YN;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptMedsYN()}`, done:false };
-  }
-
-  if (session.state === STATES.PMH_OTHER_INPUT){
-    const extra = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    session.buffer.history.pmh.push(...extra);
-    session.state = STATES.MEDS_YN;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptMedsYN()}`, done:false };
-  }
-
-  // 用藥
-  if (session.state === STATES.MEDS_YN){
-    if (!isYesNo(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptMedsYN()}`, done:false };
-    if (body === YES){
-      session.state = STATES.MEDS_INPUT;
-      await saveHistSession(fromPhone, session);
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入正在服用的藥物名稱（可多個，以逗號或頓號分隔）\n0️⃣ 返回上一題`, done:false };
-    }
-    session.buffer.history.meds = [];
-    session.state = STATES.ALLERGY_YN;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAllergyYN()}`, done:false };
-  }
-
-  if (session.state === STATES.MEDS_INPUT){
-    const meds = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    session.buffer.history.meds = meds;
-    session.state = STATES.ALLERGY_YN;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAllergyYN()}`, done:false };
-  }
-
-  // 過敏
-  if (session.state === STATES.ALLERGY_YN){
-    if (!isYesNo(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAllergyYN()}`, done:false };
-    if (body === YES){
-      session.state = STATES.ALLERGY_TYPE;
-      session.buffer.history.allergies = { types:[], items:[] };
-      await saveHistSession(fromPhone, session);
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n過敏類型（可複選，用逗號分隔）：\n1️⃣ 藥物\n2️⃣ 食物\n3️⃣ 其他\n0️⃣ 返回上一題`, done:false };
-    }
-    session.buffer.history.allergies = { types:[], items:[] };
-    session.state = STATES.SOCIAL_SMOKE;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptSmoke()}`, done:false };
-  }
-
-  if (session.state === STATES.ALLERGY_TYPE){
-    const idxs = commaNumListToIndices(body);
-    if (!idxs.length || !idxs.every(n=>n>=1 && n<=3)){
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請以逗號分隔數字，例如：1,2（1=藥物 2=食物 3=其他）\n0️⃣ 返回上一題`, done:false };
-    }
-    const map={1:'藥物',2:'食物',3:'其他'};
-    session.buffer.history.allergies.types = [...new Set(idxs.map(n=>map[n]))];
-    session.state = STATES.ALLERGY_INPUT;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入過敏項目（例如：青黴素、花生…；可多個，用逗號或頓號分隔）\n0️⃣ 返回上一題`, done:false };
-  }
-
-  if (session.state === STATES.ALLERGY_INPUT){
-    const items = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    session.buffer.history.allergies.items = items;
-    session.state = STATES.SOCIAL_SMOKE;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptSmoke()}`, done:false };
-  }
-
-  // 社會史（全部改為選項）
-  if (session.state === STATES.SOCIAL_SMOKE){
-    if (!['1','2','3'].includes(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptSmoke()}`, done:false };
-    const map = { '1':'有', '2':'無', '3':'已戒' };
-    session.buffer.history.social.smoking = map[body];
-    session.state = STATES.SOCIAL_ALCOHOL;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAlcohol()}`, done:false };
-  }
-
-  if (session.state === STATES.SOCIAL_ALCOHOL){
-    if (!['1','2','3'].includes(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAlcohol()}`, done:false };
-    const map = { '1':'每天', '2':'偶爾', '3':'無' };
-    session.buffer.history.social.alcohol = map[body];
-    session.state = STATES.SOCIAL_TRAVEL;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptTravel()}`, done:false };
-  }
-
-  if (session.state === STATES.SOCIAL_TRAVEL){
-    if (!['1','2'].includes(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptTravel()}`, done:false };
-    session.buffer.history.social.travel = (body==='1')?'有':'無';
-
-    const history = session.buffer.history;
-    await writeHistory(fromPhone, patientId, history);
-
-    session.state = STATES.REVIEW;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${renderReview(history)}`, done:false };
-  }
-
-  if (session.state === STATES.REVIEW){
-    if (!isYesNo(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入 1️⃣ 需要更改 或 2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題`, done:false };
-    if (body===YES){
-      session.state = STATES.PMH_SELECT;
-      session.buffer = { history: initHistory() };
-      await saveHistSession(fromPhone, session);
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${renderPMHMenu()}`, done:false };
-    }
-    session.state = STATES.DONE;
-    await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n✅ 已儲存最新病史，將為您進入下一個模組。`, done:true };
-  }
-
-  if (session.state === STATES.DONE){
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n（提示）病史模組已完成。`, done:true };
-  }
-
-  // 兜底：重置
-  session.state = STATES.ENTRY;
-  session.buffer = {};
-  await saveHistSession(fromPhone, session);
-  return { text: `${banner(nameForBanner, phoneForBanner)}\n已重置病史模組，請重新開始。`, done:false };
-}
-
-module.exports = { handleHistory };
+module.exports = { handleNameInput };
