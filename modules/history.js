@@ -2,9 +2,8 @@
 // Version: 7 → 7.1
 // 介面：async handleHistory({ from, msg, patientId, patientName }) -> { text, done }
 // 說明：保留舊版流程；所有問題底部加入「0️⃣ 返回上一題」；
-//      吸煙/飲酒改為選項（原行為保留）；
-//      首次呼叫(msg==='')或上次停在 H_DONE 會重置回入口。
-// 🔁 新增：當選擇「需要更改」時，進入逐題編輯模式：每題顯示原值；輸入「1」保留；否則直接輸入新內容覆蓋。
+//      更改時進入逐題編輯：Z/z/Ｚ/ｚ = 保留原值；0 = 返回上一題；先題目→原值→指引；
+//      社會史三項分行顯示（吸菸、飲酒、近期出國）。
 
 'use strict';
 const admin = require('firebase-admin');
@@ -44,7 +43,7 @@ const STATES = {
   REVIEW: 'H_REVIEW',
   DONE: 'H_DONE',
 
-  // 🆕 編輯模式（逐題顯示原值）
+  // 編輯模式（逐題）
   E_PMH: 'H_E_PMH',
   E_PMH_OTHER: 'H_E_PMH_OTHER',
   E_MEDS: 'H_E_MEDS',
@@ -52,8 +51,7 @@ const STATES = {
   E_ALG_IN: 'H_E_ALG_IN',
   E_SOC_SMK: 'H_E_SOC_SMK',
   E_SOC_ALC: 'H_E_SOC_ALC',
-  E_SOC_TRV: 'H_E_SOC_TRV',
-  E_REVIEW: 'H_E_REVIEW'
+  E_SOC_TRV: 'H_E_SOC_TRV'
 };
 const PMH_OPTIONS = ['高血壓','糖尿病','心臟病','腎臟病','肝病','中風','癌症','其他','無'];
 const YES='1', NO='2';
@@ -70,6 +68,11 @@ function commaNumListToIndices(text){
 }
 const isYesNo = (v) => v===YES || v===NO;
 const fmtList = (arr) => (Array.isArray(arr)&&arr.length)?arr.join('、'):'無';
+function isBackKey(t){ return (t||'').trim()==='0'; }
+function isKeepKey(t){
+  const s=(t||'').trim();
+  return s==='Z'||s==='z'||s==='Ｚ'||s==='ｚ';
+}
 
 function initHistory(){
   return { pmh:[], meds:[], allergies:{ types:[], items:[] }, social:{ smoking:'', alcohol:'', travel:'' } };
@@ -94,7 +97,9 @@ function renderSummary(h){
     `- 服用藥物：${meds}`,
     `- 過敏類型：${alTypes}`,
     `- 過敏明細：${alItems}`,
-    `- 吸菸：${smoking}；飲酒：${alcohol}；近期出國：${travel}`
+    `- 吸菸：${smoking}`,
+    `- 飲酒：${alcohol}`,
+    `- 近期出國：${travel}`
   ].join('\n');
 }
 function renderReview(h){
@@ -135,7 +140,7 @@ async function writeHistory(fromPhone, patientId, historyObj){
   );
 }
 
-// 定義各狀態的「上一題」
+// 「上一題」對應（含編輯流程）
 const PREV = {
   [STATES.SHOW_EXISTING]: STATES.ENTRY,
   [STATES.FIRST_NOTICE]: STATES.ENTRY,
@@ -151,122 +156,93 @@ const PREV = {
   [STATES.SOCIAL_TRAVEL]: STATES.SOCIAL_ALCOHOL,
   [STATES.REVIEW]: STATES.SOCIAL_TRAVEL,
 
-  // 🆕 編輯流程的上一題鏈
   [STATES.E_PMH]: STATES.SHOW_EXISTING,
   [STATES.E_PMH_OTHER]: STATES.E_PMH,
-  [STATES.E_MEDS]: STATES.E_PMH,  // 或 E_PMH_OTHER 後續進
+  [STATES.E_MEDS]: STATES.E_PMH,
   [STATES.E_ALG_T]: STATES.E_MEDS,
   [STATES.E_ALG_IN]: STATES.E_ALG_T,
-  [STATES.E_SOC_SMK]: STATES.E_ALG_T, // 或 E_ALG_IN 後續進
+  [STATES.E_SOC_SMK]: STATES.E_ALG_T,
   [STATES.E_SOC_ALC]: STATES.E_SOC_SMK,
-  [STATES.E_SOC_TRV]: STATES.E_SOC_ALC,
-  [STATES.E_REVIEW]: STATES.E_SOC_TRV
+  [STATES.E_SOC_TRV]: STATES.E_SOC_ALC
 };
 function backState(s){ return PREV[s] || STATES.ENTRY; }
 
-function promptSmoke(){
-  return (
-    '吸菸情況：\n' +
-    '1️⃣ 有\n' +
-    '2️⃣ 無\n' +
-    '3️⃣ 已戒\n' +
-    '0️⃣ 返回上一題'
-  );
-}
-function promptAlcohol(){
-  return (
-    '飲酒情況：\n' +
-    '1️⃣ 每天\n' +
-    '2️⃣ 偶爾\n' +
-    '3️⃣ 無\n' +
-    '0️⃣ 返回上一題'
-  );
-}
-function promptTravel(){
-  return (
-    '最近三個月是否出國旅行？\n' +
-    '1️⃣ 有\n' +
-    '2️⃣ 無\n' +
-    '0️⃣ 返回上一題'
-  );
-}
-function promptAllergyYN(){
-  return '是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題';
-}
-function promptMedsYN(){
-  return '您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有\n0️⃣ 返回上一題';
-}
-
-// 🆕 編輯模式提示
+// —— 編輯模式提示：先題目→原值→指引
 function promptEditPMH(existingPmh){
-  const cur = fmtList(existingPmh||[]);
   return (
-`過去病史（現有：${cur}）
-輸入「1」保留原值；
-或輸入新的選項（可逗號分隔數字；8=其他；9=無）：
+`請選擇您曾經患有的疾病（可複選，用逗號分隔數字）：
 ${PMH_OPTIONS.map((t,i)=>`${i+1}️⃣ ${t}`).join('\n')}
+原值：${fmtList(existingPmh||[])}
+輸入 Z 保留原值；或輸入新的選項（例如：1,2 或 1,3,7；8=其他；9=無）
 0️⃣ 返回上一題`
   );
 }
 function promptEditPMHOther(existingPmh){
-  // 原來 pmh 中非標準7項（且非「無」）視為「其他」內容
   const std = new Set(PMH_OPTIONS.slice(0,7));
   const curExtras = (existingPmh||[]).filter(x=>!std.has(x) && x!=='無');
-  const cur = fmtList(curExtras);
   return (
-`「其他」病名（現有：${cur}）
-輸入「1」保留原值；或輸入新的其他病名（可多個，以逗號或頓號分隔）
+`請輸入「其他」的具體病名（可多個，以逗號或頓號分隔）
+原值：${fmtList(curExtras)}
+輸入 Z 保留原值；或輸入新的其他病名
 0️⃣ 返回上一題`
   );
 }
 function promptEditMeds(existingMeds){
-  const cur = fmtList(existingMeds||[]);
   return (
-`現用藥物（現有：${cur}）
-輸入「1」保留原值；或輸入新的藥物清單（逗號或頓號分隔），或輸入「無」
+`請輸入正在服用的藥物名稱（可多個，以逗號或頓號分隔）
+原值：${fmtList(existingMeds||[])}
+輸入 Z 保留原值；或輸入新的藥物清單；若無請輸入「無」
 0️⃣ 返回上一題`
   );
 }
 function promptEditAllergyTypes(existingTypes){
-  const cur = fmtList(existingTypes||[]);
   return (
-`過敏類型（現有：${cur}）
-輸入「1」保留原值；或輸入新的選項（可逗號分隔數字）
+`過敏類型（可複選，用逗號分隔）：
 1️⃣ 藥物
 2️⃣ 食物
 3️⃣ 其他
+原值：${fmtList(existingTypes||[])}
+輸入 Z 保留原值；或輸入新的選項（例如：1,2）
 0️⃣ 返回上一題`
   );
 }
 function promptEditAllergyItems(existingItems){
-  const cur = fmtList(existingItems||[]);
   return (
-`過敏項目（現有：${cur}）
-輸入「1」保留原值；或輸入新的過敏項目（逗號或頓號分隔）；若無請輸入「無」
+`請輸入過敏項目（例如：青黴素、花生…；可多個，用逗號或頓號分隔）
+原值：${fmtList(existingItems||[])}
+輸入 Z 保留原值；或輸入新的過敏項目；若無請輸入「無」
 0️⃣ 返回上一題`
   );
 }
 function promptEditSmoke(existing){
-  const cur = existing || '未填';
   return (
-`吸菸（現有：${cur}）
-輸入「1」保留原值；或輸入新內容：有／無／已戒
+`吸菸情況（可輸入 1/2/3 或 文字：有／無／已戒）：
+1️⃣ 有
+2️⃣ 無
+3️⃣ 已戒
+原值：${existing || '未填'}
+輸入 Z 保留原值；或輸入 有／無／已戒（或 1/2/3）
 0️⃣ 返回上一題`
   );
 }
 function promptEditAlcohol(existing){
-  const cur = existing || '未填';
   return (
-`飲酒（現有：${cur}）
-輸入「1」保留原值；或輸入新內容：每天／偶爾／無
+`飲酒情況（可輸入 1/2/3 或 文字：每天／偶爾／無）：
+1️⃣ 每天
+2️⃣ 偶爾
+3️⃣ 無
+原值：${existing || '未填'}
+輸入 Z 保留原值；或輸入 每天／偶爾／無（或 1/2/3）
 0️⃣ 返回上一題`
   );
 }
 function promptEditTravel(existing){
-  const cur = existing || '未填';
   return (
-`最近三個月是否出國（現有：${cur}）
-輸入「1」保留原值；或輸入新內容：有／無
+`最近三個月是否出國旅行？（可輸入 1/2 或 文字：有／無）
+1️⃣ 有
+2️⃣ 無
+原值：${existing || '未填'}
+輸入 Z 保留原值；或輸入 有／無（或 1/2）
 0️⃣ 返回上一題`
   );
 }
@@ -277,17 +253,16 @@ function resendPromptForState(state, existing){
     case STATES.FIRST_NOTICE:   return '請輸入 1️⃣ 繼續\n0️⃣ 返回上一題';
     case STATES.PMH_SELECT:     return renderPMHMenu();
     case STATES.PMH_OTHER_INPUT:return '請輸入「其他」的具體病名（可多個，以逗號或頓號分隔）\n0️⃣ 返回上一題';
-    case STATES.MEDS_YN:        return promptMedsYN();
+    case STATES.MEDS_YN:        return '您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有\n0️⃣ 返回上一題';
     case STATES.MEDS_INPUT:     return '請輸入正在服用的藥物名稱（可多個，以逗號或頓號分隔）\n0️⃣ 返回上一題';
-    case STATES.ALLERGY_YN:     return promptAllergyYN();
+    case STATES.ALLERGY_YN:     return '是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題';
     case STATES.ALLERGY_TYPE:   return '過敏類型（可複選，用逗號分隔）：\n1️⃣ 藥物\n2️⃣ 食物\n3️⃣ 其他\n0️⃣ 返回上一題';
     case STATES.ALLERGY_INPUT:  return '請輸入過敏項目（例如：青黴素、花生…；可多個，用逗號或頓號分隔）\n0️⃣ 返回上一題';
-    case STATES.SOCIAL_SMOKE:   return promptSmoke();
-    case STATES.SOCIAL_ALCOHOL: return promptAlcohol();
-    case STATES.SOCIAL_TRAVEL:  return promptTravel();
-    case STATES.REVIEW:         return '請輸入 1️⃣ 需要更改 或 2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題';
+    case STATES.SOCIAL_SMOKE:   return '吸菸情況：\n1️⃣ 有\n2️⃣ 無\n3️⃣ 已戒\n0️⃣ 返回上一題';
+    case STATES.SOCIAL_ALCOHOL: return '飲酒情況：\n1️⃣ 每天\n2️⃣ 偶爾\n3️⃣ 無\n0️⃣ 返回上一題';
+    case STATES.SOCIAL_TRAVEL:  return '最近三個月是否出國旅行？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題';
 
-    // 🆕 編輯模式重發提示
+    // 編輯模式
     case STATES.E_PMH:          return promptEditPMH(existing?.pmh);
     case STATES.E_PMH_OTHER:    return promptEditPMHOther(existing?.pmh);
     case STATES.E_MEDS:         return promptEditMeds(existing?.meds);
@@ -296,7 +271,6 @@ function resendPromptForState(state, existing){
     case STATES.E_SOC_SMK:      return promptEditSmoke(existing?.social?.smoking);
     case STATES.E_SOC_ALC:      return promptEditAlcohol(existing?.social?.alcohol);
     case STATES.E_SOC_TRV:      return promptEditTravel(existing?.social?.travel);
-    case STATES.E_REVIEW:       return '請輸入 1️⃣ 確認儲存 或 2️⃣ 取消編輯回上一題\n0️⃣ 返回上一題';
     default:                    return '請依畫面輸入對應選項。';
   }
 }
@@ -323,7 +297,6 @@ async function handleHistory({ from, msg, patientId, patientName }) {
   const nameForBanner  = pDoc?.name  || patientName || '（未命名）';
   const phoneForBanner = fromPhone;
 
-  // 首次呼叫或上次停在 DONE/非法 → 重置入口
   const firstHit = body === '';
   const invalid = !session.state || !String(session.state).startsWith('H_') || session.state === STATES.DONE;
   if (firstHit || invalid) {
@@ -332,8 +305,7 @@ async function handleHistory({ from, msg, patientId, patientName }) {
     await saveHistSession(fromPhone, session);
   }
 
-  // 0️⃣ 返回上一題
-  if (body === '0') {
+  if (isBackKey(body)) {
     const prev = backState(session.state);
     session.state = prev;
     await saveHistSession(fromPhone, session);
@@ -361,6 +333,7 @@ ${renderSummary(existing)}
       };
     }
     session.state = STATES.FIRST_NOTICE;
+    session.buffer = { history: initHistory() };
     await saveHistSession(fromPhone, session);
     return {
       text:
@@ -379,14 +352,13 @@ ${renderSummary(existing)}
       return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入 1️⃣ 更改 或 2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題`, done:false };
 
     if (body === YES){
-      // 🆕 進入逐題編輯模式：先以「現有資料」作為基礎
+      // 進入編輯模式，預填現有資料
       session.buffer = { history: JSON.parse(JSON.stringify(existing || initHistory())) };
       session.state = STATES.E_PMH;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditPMH(session.buffer.history.pmh)}`, done:false };
     }
 
-    // 不更改 → 直接完成
     session.state = STATES.DONE;
     await saveHistSession(fromPhone, session);
     return { text: `${banner(nameForBanner, phoneForBanner)}\n✅ 病史已確認無需更改，將為您進入下一個模組。`, done:true };
@@ -401,9 +373,7 @@ ${renderSummary(existing)}
     return { text: `${banner(nameForBanner, phoneForBanner)}\n${renderPMHMenu()}`, done:false };
   }
 
-  // ====== 原有建立流程（不變） ======
-
-  // PMH
+  // ====== 原有建立流程（保留） ======
   if (session.state === STATES.PMH_SELECT){
     const idxs = commaNumListToIndices(body);
     if (!idxs.length || !idxs.every(n=>n>=1 && n<=PMH_OPTIONS.length)){
@@ -426,7 +396,7 @@ ${renderSummary(existing)}
     }
     session.state = STATES.MEDS_YN;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptMedsYN()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有\n0️⃣ 返回上一題`, done:false };
   }
 
   if (session.state === STATES.PMH_OTHER_INPUT){
@@ -434,13 +404,12 @@ ${renderSummary(existing)}
     session.buffer.history.pmh.push(...extra);
     session.state = STATES.MEDS_YN;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptMedsYN()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有\n0️⃣ 返回上一題`, done:false };
   }
 
-  // 用藥
   if (session.state === STATES.MEDS_YN){
     if (!isYesNo(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptMedsYN()}`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n您目前是否有在服用藥物？\n1️⃣ 有\n2️⃣ 沒有\n0️⃣ 返回上一題`, done:false };
     if (body === YES){
       session.state = STATES.MEDS_INPUT;
       await saveHistSession(fromPhone, session);
@@ -449,7 +418,7 @@ ${renderSummary(existing)}
     session.buffer.history.meds = [];
     session.state = STATES.ALLERGY_YN;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAllergyYN()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題`, done:false };
   }
 
   if (session.state === STATES.MEDS_INPUT){
@@ -457,13 +426,12 @@ ${renderSummary(existing)}
     session.buffer.history.meds = meds;
     session.state = STATES.ALLERGY_YN;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAllergyYN()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題`, done:false };
   }
 
-  // 過敏
   if (session.state === STATES.ALLERGY_YN){
     if (!isYesNo(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAllergyYN()}`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n是否有藥物或食物過敏？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題`, done:false };
     if (body === YES){
       session.state = STATES.ALLERGY_TYPE;
       session.buffer.history.allergies = { types:[], items:[] };
@@ -473,7 +441,7 @@ ${renderSummary(existing)}
     session.buffer.history.allergies = { types:[], items:[] };
     session.state = STATES.SOCIAL_SMOKE;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptSmoke()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n3️⃣ 已戒\n0️⃣ 返回上一題`, done:false };
   }
 
   if (session.state === STATES.ALLERGY_TYPE){
@@ -493,33 +461,32 @@ ${renderSummary(existing)}
     session.buffer.history.allergies.items = items;
     session.state = STATES.SOCIAL_SMOKE;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptSmoke()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n3️⃣ 已戒\n0️⃣ 返回上一題`, done:false };
   }
 
-  // 社會史（全部改為選項）
   if (session.state === STATES.SOCIAL_SMOKE){
     if (!['1','2','3'].includes(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptSmoke()}`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n吸菸情況：\n1️⃣ 有\n2️⃣ 無\n3️⃣ 已戒\n0️⃣ 返回上一題`, done:false };
     const map = { '1':'有', '2':'無', '3':'已戒' };
     session.buffer.history.social.smoking = map[body];
     session.state = STATES.SOCIAL_ALCOHOL;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAlcohol()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n飲酒情況：\n1️⃣ 每天\n2️⃣ 偶爾\n3️⃣ 無\n0️⃣ 返回上一題`, done:false };
   }
 
   if (session.state === STATES.SOCIAL_ALCOHOL){
     if (!['1','2','3'].includes(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptAlcohol()}`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n飲酒情況：\n1️⃣ 每天\n2️⃣ 偶爾\n3️⃣ 無\n0️⃣ 返回上一題`, done:false };
     const map = { '1':'每天', '2':'偶爾', '3':'無' };
     session.buffer.history.social.alcohol = map[body];
     session.state = STATES.SOCIAL_TRAVEL;
     await saveHistSession(fromPhone, session);
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptTravel()}`, done:false };
+    return { text: `${banner(nameForBanner, phoneForBanner)}\n最近三個月是否出國旅行？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題`, done:false };
   }
 
   if (session.state === STATES.SOCIAL_TRAVEL){
     if (!['1','2'].includes(body))
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptTravel()}`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n最近三個月是否出國旅行？\n1️⃣ 有\n2️⃣ 無\n0️⃣ 返回上一題`, done:false };
     session.buffer.history.social.travel = (body==='1')?'有':'無';
 
     const history = session.buffer.history;
@@ -534,7 +501,7 @@ ${renderSummary(existing)}
     if (!isYesNo(body))
       return { text: `${banner(nameForBanner, phoneForBanner)}\n請輸入 1️⃣ 需要更改 或 2️⃣ 不需要，直接繼續\n0️⃣ 返回上一題`, done:false };
     if (body===YES){
-      // 🆕 由回顧畫面進入編輯模式
+      // 進入編輯模式（以現有填答為基礎）
       session.state = STATES.E_PMH;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditPMH(session.buffer.history.pmh)}`, done:false };
@@ -544,15 +511,11 @@ ${renderSummary(existing)}
     return { text: `${banner(nameForBanner, phoneForBanner)}\n✅ 已儲存最新病史，將為您進入下一個模組。`, done:true };
   }
 
-  if (session.state === STATES.DONE){
-    return { text: `${banner(nameForBanner, phoneForBanner)}\n（提示）病史模組已完成。`, done:true };
-  }
-
-  // ====== 🆕 編輯模式（逐題顯示原值；1=保留；輸入新內容=覆蓋） ======
+  // ====== 編輯模式（Z 保留） ======
 
   if (session.state === STATES.E_PMH){
-    if (body === '1'){
-      // 保留原 pmh，檢視是否原本有「其他」內容
+    if (isKeepKey(body)){
+      // 是否原本有「其他」內容？如有，繼續問 E_PMH_OTHER
       const std = new Set(PMH_OPTIONS.slice(0,7));
       const curExtras = (session.buffer.history.pmh||[]).filter(x=>!std.has(x) && x!=='無');
       if (curExtras.length){
@@ -566,7 +529,7 @@ ${renderSummary(existing)}
     }
     const idxs = commaNumListToIndices(body);
     if (!idxs.length || !idxs.every(n=>n>=1 && n<=PMH_OPTIONS.length)){
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n格式不正確，請以逗號分隔數字，例如：1,2 或 1,3,7\n\n${promptEditPMH(session.buffer.history.pmh)}`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditPMH(session.buffer.history.pmh)}`, done:false };
     }
     let picked = [];
     let needOther=false, isNone=false;
@@ -593,13 +556,12 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_PMH_OTHER){
-    if (body === '1'){
+    if (isKeepKey(body)){
       session.state = STATES.E_MEDS;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditMeds(session.buffer.history.meds)}`, done:false };
     }
     const extra = body.replace(/，/g,'、').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
-    // 先剔除舊的「其他項」，再加入新輸入
     const std = new Set(PMH_OPTIONS.slice(0,7));
     const base = (session.buffer.history.pmh||[]).filter(x=>std.has(x));
     session.buffer.history.pmh = base.concat(extra);
@@ -609,7 +571,7 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_MEDS){
-    if (body === '1'){
+    if (isKeepKey(body)){
       session.state = STATES.E_ALG_T;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditAllergyTypes(session.buffer.history.allergies?.types)}`, done:false };
@@ -627,8 +589,7 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_ALG_T){
-    if (body === '1'){
-      // 若原本有類型且有項目，詢問是否保留項目；若原本無類型，跳過項目
+    if (isKeepKey(body)){
       const hasTypes = (session.buffer.history.allergies?.types||[]).length>0;
       session.state = hasTypes ? STATES.E_ALG_IN : STATES.E_SOC_SMK;
       await saveHistSession(fromPhone, session);
@@ -638,7 +599,7 @@ ${renderSummary(existing)}
     }
     const idxs = commaNumListToIndices(body);
     if (!idxs.length || !idxs.every(n=>n>=1 && n<=3)){
-      return { text: `${banner(nameForBanner, phoneForBanner)}\n請以逗號分隔數字，例如：1,2（1=藥物 2=食物 3=其他）\n0️⃣ 返回上一題`, done:false };
+      return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditAllergyTypes(session.buffer.history.allergies?.types)}`, done:false };
     }
     const map={1:'藥物',2:'食物',3:'其他'};
     session.buffer.history.allergies = session.buffer.history.allergies || { types:[], items:[] };
@@ -649,7 +610,7 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_ALG_IN){
-    if (body === '1'){
+    if (isKeepKey(body)){
       session.state = STATES.E_SOC_SMK;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditSmoke(session.buffer.history.social?.smoking)}`, done:false };
@@ -667,12 +628,13 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_SOC_SMK){
-    if (body === '1'){
+    if (isKeepKey(body)){
       session.state = STATES.E_SOC_ALC;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditAlcohol(session.buffer.history.social?.alcohol)}`, done:false };
     }
-    const val = body.trim();
+    let val = body.trim();
+    if (val==='1') val='有'; else if(val==='2') val='無'; else if(val==='3') val='已戒';
     if (!['有','無','已戒'].includes(val)){
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditSmoke(session.buffer.history.social?.smoking)}`, done:false };
     }
@@ -683,12 +645,13 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_SOC_ALC){
-    if (body === '1'){
+    if (isKeepKey(body)){
       session.state = STATES.E_SOC_TRV;
       await saveHistSession(fromPhone, session);
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditTravel(session.buffer.history.social?.travel)}`, done:false };
     }
-    const val = body.trim();
+    let val = body.trim();
+    if (val==='1') val='每天'; else if(val==='2') val='偶爾'; else if(val==='3') val='無';
     if (!['每天','偶爾','無'].includes(val)){
       return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditAlcohol(session.buffer.history.social?.alcohol)}`, done:false };
     }
@@ -699,21 +662,18 @@ ${renderSummary(existing)}
   }
 
   if (session.state === STATES.E_SOC_TRV){
-    if (body === '1'){
-      // 保留
-    } else {
-      const val = body.trim();
+    if (!isKeepKey(body)){
+      let val = body.trim();
+      if (val==='1') val='有'; else if (val==='2') val='無';
       if (!['有','無'].includes(val)){
         return { text: `${banner(nameForBanner, phoneForBanner)}\n${promptEditTravel(session.buffer.history.social?.travel)}`, done:false };
       }
       session.buffer.history.social.travel = val;
     }
-
-    // 完成編輯：寫回
     const history = session.buffer.history;
     await writeHistory(fromPhone, patientId, history);
 
-    session.state = STATES.REVIEW; // 回到原本 REVIEW（保持行為一致）
+    session.state = STATES.REVIEW; // 回到回顧畫面
     await saveHistSession(fromPhone, session);
     return { text: `${banner(nameForBanner, phoneForBanner)}\n${renderReview(history)}`, done:false };
   }
