@@ -1,5 +1,6 @@
-//  modules/name_input.js
-// Version: 7 → 7.1 (增強：更改資料時逐題顯示原值；輸入「1」保留；輸入新值覆蓋)
+// modules/name_input.js
+// Version: 7 → 7.1
+// 變更：更改個資時逐題顯示；Z/z/Ｚ/ｚ = 保留原值；0 = 返回上一題；先題目→再原值→再指引。
 // 介面：async handleNameInput({ req, from, msg }) -> { text, done }
 
 'use strict';
@@ -34,6 +35,10 @@ function isValidDateYYYYMMDD(t) {
 }
 function isValidId(t) { return typeof t === 'string' && t.trim().length >= 4; }
 function isBackKey(t) { return (t || '').trim() === '0'; }
+function isKeepKey(t) {
+  const s = (t || '').trim();
+  return s === 'Z' || s === 'z' || s === 'Ｚ' || s === 'ｚ';
+}
 
 function renderMenu(patients, firstTime=false) {
   const lines = [];
@@ -65,14 +70,14 @@ function renderDeleteMenu(patients){
 function renderProfile(p){
   return [
     '📄 病人個人資料',
-    `姓名：${p.name}`,
-    `性別：${p.gender}`,
-    `出生日期：${p.birthDate}`,
-    `身份證號碼：${p.idNumber}`
+    `姓名：${p.name || '（未填）'}`,
+    `性別：${p.gender || '（未填）'}`,
+    `出生日期：${p.birthDate || '（未填）'}`,
+    `身份證號碼：${p.idNumber || '（未填）'}`
   ].join('\n');
 }
 
-/** 🔧 新增：讀取/更新病人 + 編輯提示文字 **/
+// 讀/寫單一病人
 async function getPatient(phone, patientId){
   const ref = db.collection('users').doc(phone).collection('patients').doc(patientId);
   const s = await ref.get();
@@ -82,22 +87,25 @@ async function updatePatient(phone, patientId, updates){
   updates.updatedAt = new Date();
   await db.collection('users').doc(phone).collection('patients').doc(patientId).set(updates, { merge:true });
 }
+
+// 編輯提示：先題目→原值→指引
 function renderEditPrompt(field, originVal){
-  const labelMap = {
-    name: '姓名（身份證姓名）',
-    gender: '性別（回覆「男」或「女」）',
-    birthDate: '出生日期（YYYY-MM-DD）',
-    idNumber: '身份證號碼'
+  const qMap = {
+    name: '1️⃣ 請輸入姓名（身份證姓名）。',
+    gender: '2️⃣ 請輸入性別（回覆「男」或「女」）。',
+    birthDate: '3️⃣ 請輸入出生日期（YYYY-MM-DD，例如：1978-01-21）。',
+    idNumber: '4️⃣ 請輸入身份證號碼：'
   };
   const safe = (originVal ?? '').toString() || '（無資料）';
   return [
-    `請輸入新的${labelMap[field]}：`,
-    `（輸入「1」可保留原值：${safe}）`,
+    qMap[field],
+    `原值：${safe}`,
+    '輸入 Z 保留原值；或輸入新內容以修改；',
     '0️⃣ 返回上一題'
   ].join('\n');
 }
 
-// 使用者/病人/Session（原樣保留）
+// 使用者/病人/Session
 async function ensureAccount(phone){
   const ref = db.collection('users').doc(phone);
   const s = await ref.get();
@@ -128,7 +136,7 @@ async function deletePatient(phone, id){
   await db.collection('users').doc(phone).collection('patients').doc(id).delete();
 }
 
-// 專用 session（原樣保留）
+// 專用 session
 async function getFSSession(phone){
   const ref = db.collection('sessions').doc(phone);
   const s = await ref.get();
@@ -191,7 +199,6 @@ async function handleNameInput({ req, from, msg }) {
     switch (session.state) {
       case 'MENU': {
         if (isBackKey(body)) {
-          // MENU 無上一題：停留本畫面
           return { text: renderMenu(patients, patients.length===0), done:false };
         }
         const n = Number(body);
@@ -204,11 +211,9 @@ async function handleNameInput({ req, from, msg }) {
         if (Number.isInteger(n) && n >= 1 && n <= patients.length + 1) {
           if (n <= patients.length) {
             const chosen = patients[n - 1];
-            // 把選定病人寫回 index 的 sessions（selectedPatient）
             await db.collection('sessions').doc(phone).set({
               selectedPatient: { patientId: chosen.id, name: chosen.name }
             }, { merge:true });
-            // 回兩段合併在一則訊息內：個資 + 下一步/更改
             const text =
               `${renderProfile(chosen)}\n\n` +
               '請確認下一步動作：\n' +
@@ -246,7 +251,6 @@ async function handleNameInput({ req, from, msg }) {
           return { text: '✅ 已確認，進入下一步。', done:true };
         }
         if (body === '2') {
-          // 🆕 進入逐題顯示原值的更改流程
           const pid = session.temp?.pickedId;
           const current = pid ? await getPatient(phone, pid) : null;
           if (!current) {
@@ -271,16 +275,16 @@ async function handleNameInput({ req, from, msg }) {
         return { text:'請輸入 1（下一步）或 2（更改），或 0 返回上一題。', done:false };
       }
 
-      /** 🆕 逐題顯示原值的更改流程 **/
+      // === 編輯流程（Z 保留；0 返回；先題目→原值→指引） ===
       case 'EDIT_NAME': {
         if (isBackKey(body)) {
           session.state = 'AFTER_PICK';
           await saveFSSession(session);
           return { text:'已返回。請輸入 1（進入下一步）或 2（更改此病人資料），或 0 返回上一題。', done:false };
         }
-        const val = (body === '1') ? session.temp.editOrig.name : body;
+        const val = isKeepKey(body) ? session.temp.editOrig.name : body;
         if (!val || val.trim().length === 0) {
-          return { text:'姓名不能為空。請重新輸入。\n' + renderEditPrompt('name', session.temp.editOrig.name), done:false };
+          return { text:'姓名不能為空。\n' + renderEditPrompt('name', session.temp.editOrig.name), done:false };
         }
         session.temp.editNew.name = val.trim();
         session.state = 'EDIT_GENDER';
@@ -293,7 +297,7 @@ async function handleNameInput({ req, from, msg }) {
           await saveFSSession(session);
           return { text: renderEditPrompt('name', session.temp.editOrig.name), done:false };
         }
-        const val = (body === '1') ? session.temp.editOrig.gender : body;
+        const val = isKeepKey(body) ? session.temp.editOrig.gender : body;
         if (!isValidGender(val)) {
           return { text:'格式不正確。請回覆「男」或「女」。\n' + renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
         }
@@ -308,7 +312,7 @@ async function handleNameInput({ req, from, msg }) {
           await saveFSSession(session);
           return { text: renderEditPrompt('gender', session.temp.editOrig.gender), done:false };
         }
-        const val = (body === '1') ? session.temp.editOrig.birthDate : body;
+        const val = isKeepKey(body) ? session.temp.editOrig.birthDate : body;
         if (!isValidDateYYYYMMDD(val)) {
           return { text:'出生日期格式不正確。請用 YYYY-MM-DD（例如：1978-01-21）。\n' + renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
         }
@@ -323,13 +327,12 @@ async function handleNameInput({ req, from, msg }) {
           await saveFSSession(session);
           return { text: renderEditPrompt('birthDate', session.temp.editOrig.birthDate), done:false };
         }
-        const val = (body === '1') ? session.temp.editOrig.idNumber : body;
+        const val = isKeepKey(body) ? session.temp.editOrig.idNumber : body;
         if (!isValidId(val)) {
           return { text:'身份證號碼不正確，請重新輸入（至少 4 個字元）。\n' + renderEditPrompt('idNumber', session.temp.editOrig.idNumber), done:false };
         }
         session.temp.editNew.idNumber = val;
 
-        // 寫回 Firestore
         const updates = {
           name: session.temp.editNew.name,
           gender: session.temp.editNew.gender,
@@ -338,15 +341,11 @@ async function handleNameInput({ req, from, msg }) {
         };
         await updatePatient(phone, session.temp.pickedId, updates);
 
-        // 讀回最新資料供顯示
         const updated = await getPatient(phone, session.temp.pickedId);
-
-        // 設為選定病人（保持原行為）
         await db.collection('sessions').doc(phone).set({
           selectedPatient: { patientId: updated.id, name: updated.name }
         }, { merge:true });
 
-        // 返回 AFTER_PICK：讓使用者可進入下一步或再次更改
         session.state = 'AFTER_PICK';
         session.temp = { pickedId: updated.id };
         await saveFSSession(session);
@@ -355,7 +354,7 @@ async function handleNameInput({ req, from, msg }) {
         return { text, done:false };
       }
 
-      // === 以下為原本新增流程（不變） ===
+      // === 原本「新增」流程（不變） ===
       case 'ADD_NAME': {
         if (isBackKey(body)) {
           session.state = 'MENU';
@@ -413,7 +412,6 @@ async function handleNameInput({ req, from, msg }) {
         session.temp.idNumber = body;
         const created = await addPatient(phone, session.temp);
 
-        // 設為選定病人
         await db.collection('sessions').doc(phone).set({
           selectedPatient: { patientId: created.id, name: created.name }
         }, { merge:true });
