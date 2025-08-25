@@ -1,0 +1,123 @@
+[
+  {
+    "location_id": "eye_ball",
+    "location_name_zh": "整個眼球",
+    "symptoms": [
+      {
+        "symptom_id": "eye_pain",
+        "name_zh": "眼睛痠痛",
+        "name_en": "eye pain"
+      },
+      {
+        "symptom_id": "foreign_body",
+        "name_zh": "有異物感",
+        "name_en": "foreign body sensation"
+      },
+      {
+        "symptom_id": "redness",
+        "name_zh": "眼睛紅",
+        "name_en": "redness"
+      },
+      {
+        "symptom_id": "dryness",
+        "name_zh": "眼睛乾澀",
+        "name_en": "dryness"
+      }
+    ]
+  },
+  {
+    "location_id": "eyelid",
+    "location_name_zh": "眼瞼（眼皮）",
+    "symptoms": [
+      {
+        "symptom_id": "swollen_eyelid",
+        "name_zh": "眼皮腫脹",
+        "name_en": "swollen eyelid"
+      },
+      {
+        "symptom_id": "eyelid_twitch",
+        "name_zh": "眼皮跳",
+        "name_en": "eyelid twitching"
+      },
+      {
+        "symptom_id": "eyelid_pain",
+        "name_zh": "眼皮痛",
+        "name_en": "eyelid pain"
+      }
+    ]
+  },
+  {
+    "location_id": "sclera",
+    "location_name_zh": "眼白（鞏膜）",
+    "symptoms": [
+      {
+        "symptom_id": "red_sclera",
+        "name_zh": "眼白紅",
+        "name_en": "red sclera"
+      },
+      {
+        "symptom_id": "yellow_sclera",
+        "name_zh": "眼白變黃",
+        "name_en": "yellow sclera"
+      }
+    ]
+  },
+  {
+    "location_id": "cornea",
+    "location_name_zh": "黑眼珠（角膜）",
+    "symptoms": [
+      {
+        "symptom_id": "blurred_vision",
+        "name_zh": "視線模糊",
+        "name_en": "blurred vision"
+      },
+      {
+        "symptom_id": "light_sensitivity",
+        "name_zh": "怕光",
+        "name_en": "photophobia"
+      },
+      {
+        "symptom_id": "tearing",
+        "name_zh": "流眼水",
+        "name_en": "tearing"
+      }
+    ]
+  },
+  {
+    "location_id": "pupil",
+    "location_name_zh": "瞳孔",
+    "symptoms": [
+      {
+        "symptom_id": "unequal_pupil",
+        "name_zh": "瞳孔大小不一",
+        "name_en": "anisocoria"
+      },
+      {
+        "symptom_id": "pupil_dilation",
+        "name_zh": "瞳孔擴大",
+        "name_en": "pupil dilation"
+      }
+    ]
+  },
+  {
+    "location_id": "vision",
+    "location_name_zh": "視力問題",
+    "symptoms": [
+      {
+        "symptom_id": "double_vision",
+        "name_zh": "複視",
+        "name_en": "double vision"
+      },
+      {
+        "symptom_id": "sudden_vision_loss",
+        "name_zh": "突發視力減退",
+        "name_en": "sudden vision loss"
+      },
+      {
+        "symptom_id": "dark_spots",
+        "name_zh": "看見黑影／浮游物",
+        "name_en": "floaters"
+      }
+    ]
+  }
+]
