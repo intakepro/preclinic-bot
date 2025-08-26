@@ -58,6 +58,10 @@ app.use(bodyParser.urlencoded({ extended: false }));
 const adminUpload = require('./routes/admin_upload');
 app.use('/admin', adminUpload);
 
+const uploadSymptoms = require('./routes/upload-symptoms');
+app.use('/admin', uploadSymptoms);
+
+
 
 // ===== Session（Firestore）=====
 const phoneOf = (from) =>
