@@ -1,123 +1,4342 @@
-[
-  {
-    "location_id": "eye_ball",
-    "location_name_zh": "整個眼球",
-    "symptoms": [
-      {
-        "symptom_id": "eye_pain",
-        "name_zh": "眼睛痠痛",
-        "name_en": "eye pain"
-      },
-      {
-        "symptom_id": "foreign_body",
-        "name_zh": "有異物感",
-        "name_en": "foreign body sensation"
-      },
-      {
-        "symptom_id": "redness",
-        "name_zh": "眼睛紅",
-        "name_en": "redness"
-      },
-      {
-        "symptom_id": "dryness",
-        "name_zh": "眼睛乾澀",
-        "name_en": "dryness"
-      }
-    ]
-  },
-  {
-    "location_id": "eyelid",
-    "location_name_zh": "眼瞼（眼皮）",
-    "symptoms": [
-      {
-        "symptom_id": "swollen_eyelid",
-        "name_zh": "眼皮腫脹",
-        "name_en": "swollen eyelid"
-      },
-      {
-        "symptom_id": "eyelid_twitch",
-        "name_zh": "眼皮跳",
-        "name_en": "eyelid twitching"
-      },
-      {
-        "symptom_id": "eyelid_pain",
-        "name_zh": "眼皮痛",
-        "name_en": "eyelid pain"
-      }
-    ]
-  },
-  {
-    "location_id": "sclera",
-    "location_name_zh": "眼白（鞏膜）",
-    "symptoms": [
-      {
-        "symptom_id": "red_sclera",
-        "name_zh": "眼白紅",
-        "name_en": "red sclera"
-      },
-      {
-        "symptom_id": "yellow_sclera",
-        "name_zh": "眼白變黃",
-        "name_en": "yellow sclera"
-      }
-    ]
-  },
-  {
-    "location_id": "cornea",
-    "location_name_zh": "黑眼珠（角膜）",
-    "symptoms": [
-      {
-        "symptom_id": "blurred_vision",
-        "name_zh": "視線模糊",
-        "name_en": "blurred vision"
-      },
-      {
-        "symptom_id": "light_sensitivity",
-        "name_zh": "怕光",
-        "name_en": "photophobia"
-      },
-      {
-        "symptom_id": "tearing",
-        "name_zh": "流眼水",
-        "name_en": "tearing"
-      }
-    ]
-  },
-  {
-    "location_id": "pupil",
-    "location_name_zh": "瞳孔",
-    "symptoms": [
-      {
-        "symptom_id": "unequal_pupil",
-        "name_zh": "瞳孔大小不一",
-        "name_en": "anisocoria"
-      },
-      {
-        "symptom_id": "pupil_dilation",
-        "name_zh": "瞳孔擴大",
-        "name_en": "pupil dilation"
-      }
-    ]
-  },
-  {
-    "location_id": "vision",
-    "location_name_zh": "視力問題",
-    "symptoms": [
-      {
-        "symptom_id": "double_vision",
-        "name_zh": "複視",
-        "name_en": "double vision"
-      },
-      {
-        "symptom_id": "sudden_vision_loss",
-        "name_zh": "突發視力減退",
-        "name_en": "sudden vision loss"
-      },
-      {
-        "symptom_id": "dark_spots",
-        "name_zh": "看見黑影／浮游物",
-        "name_en": "floaters"
-      }
-    ]
-  }
-]
+{
+  "head_neck": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"rash_head\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "back": [
+    {
+      "id": "[\"back_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"stiffness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"radicular_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "upper_limb": [
+    {
+      "id": "[\"shoulder_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"limited_range_of_motion\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"shoulder_weakness\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "lower_limb": [
+    {
+      "id": "[\"thigh_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"thigh_swelling\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "whole_body": [
+    {
+      "id": "[\"fever\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"fatigue\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"weight_loss\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"chills\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"night_sweats\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "other": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "nan": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "head_top": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "eye": [
+    {
+      "id": "[\"eye_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vision_blur\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"red_eye\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"photophobia\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "ear": [
+    {
+      "id": "[\"ear_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"tinnitus\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"hearing_loss\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"ear_discharge\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "mouth": [
+    {
+      "id": "[\"oral_ulcer\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"halitosis\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"gingival_bleeding\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dry_mouth\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "nose": [
+    {
+      "id": "[\"runny_nose\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nasal_congestion\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"epistaxis\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"sinus_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "throat": [
+    {
+      "id": "[\"sore_throat\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"hoarseness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dysphagia\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "neck": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "face": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "hair": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_whole": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_center_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_medial_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_left_lateral_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_medial_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral_upper": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral_middle": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral_superficial": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_right_lateral_internal": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_all": [
+    {
+      "id": "[\"breast_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"breast_mass\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nipple_discharge\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_upper_left": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_lower_left": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_upper_right": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_lower_right": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_center": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_nipple": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_skin": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "chest_breast_internal": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_genital": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_left_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_left": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_left_side": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_right_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_right": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_right_side": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_skin": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_upper_internal": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_left_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_left": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_left_side": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_right_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_right": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_right_side": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_skin": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_middle_internal": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_left_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_left": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_left_side": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_right_center": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_right": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_right_side": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_skin": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "abdomen_lower_internal": [
+    {
+      "id": "[\"abdominal_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"nausea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"vomiting\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"diarrhea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"constipation\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bloating\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_mons_pubis": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_labia_majora": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_labia_minora": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_clitoris": [
+    {
+      "id": "[\"headache\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dizziness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"facial_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_urethra": [
+    {
+      "id": "[\"oral_ulcer\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"halitosis\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"gingival_bleeding\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dry_mouth\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_vaginal_opening": [
+    {
+      "id": "[\"oral_ulcer\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"halitosis\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"gingival_bleeding\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dry_mouth\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_perineum": [
+    {
+      "id": "[\"oral_ulcer\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"halitosis\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"gingival_bleeding\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dry_mouth\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_skin_surface": [
+    {
+      "id": "[\"rash\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"wound\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"bruising\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"subcutaneous_nodule\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "genital_whole_uncertain": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "back_upper": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "back_middle": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "back_lower": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "back_spine": [
+    {
+      "id": "[\"chest_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"dyspnea\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"cough\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"palpitations\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "back_anus": [
+    {
+      "id": "[\"unspecified_complaint\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "eye_ball": [
+    {
+      "id": "[\"blurred_vision\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"eye_pain\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"foreign_body\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"redness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"tearing\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "eyelid": [
+    {
+      "id": "[\"swelling_eyelid\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching_eyelid\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"eyelid_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "conjunctiva": [
+    {
+      "id": "[\"redness\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"tearing\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"discharge\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "cornea": [
+    {
+      "id": "[\"blurred_vision\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"photophobia\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"foreign_body\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "pupil": [
+    {
+      "id": "[\"unequal_pupil\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"light_sensitivity\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"pupil_dilation\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "eyelash_eyebrow": [
+    {
+      "id": "[\"eyelash_loss\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"eyelid_itching\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"eyelash_pain\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ],
+  "vision_general": [
+    {
+      "id": "[\"blurry_far\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"blurry_near\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"distorted_vision\"",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    },
+    {
+      "id": "\"color_blindness\"]",
+      "name_zh": "❓ 製作中",
+      "name_en": "",
+      "snomed_id": "",
+      "icd10": "",
+      "likely_systems": []
+    }
+  ]
+}
