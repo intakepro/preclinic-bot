@@ -54,6 +54,11 @@ const STEPS = [
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
+// 🔧 管理端上傳路由（支援 GET 上傳 JSON 到 Firestore）
+const adminUpload = require('./routes/admin_upload');
+app.use('/admin', adminUpload);
+
+
 // ===== Session（Firestore）=====
 const phoneOf = (from) =>
   (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
