@@ -79,6 +79,28 @@ app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
 
 
 
+// Webhook 驗證（Meta 用來驗證 callback URL）
+app.get('/whatsapp', (req, res) => {
+  const verifyToken = 'iloveprime'; // 🔒要與 Meta 設定的一致
+
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode && token && mode === 'subscribe' && token === verifyToken) {
+    console.log('[Webhook] Meta webhook verified');
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
+
+
+
+
+
+
 
 // ===== Session（Firestore）=====
 const phoneOf = (from) =>
