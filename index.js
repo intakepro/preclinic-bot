@@ -62,13 +62,8 @@ const uploadSymptoms = require('./routes/upload-symptoms');
 app.use('/admin', uploadSymptoms);
 
 
-app.get('/admin/upload-bodyparts', async (req, res) => {
-  const { key } = req.query;
-  if (key !== process.env.ADMIN_KEY) return res.status(403).send('Forbidden');
-  await uploadBodyParts();
-  res.send('Body parts uploaded');
-});
-
+const uploadBodyParts = require('./routes/upload-bodyparts');
+app.use('/admin', uploadBodyParts);
 
 
 
