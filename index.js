@@ -60,8 +60,23 @@ const uploadSymptoms = require('./routes/upload-symptoms');
 app.use('/admin', uploadSymptoms);
 
 
-const uploadBodyParts = require('./routes/upload_body_parts_to_firestore');
-app.use('/admin', uploadBodyParts);
+//const uploadBodyParts = require('./routes/upload_body_parts_to_firestore');
+//app.use('/admin', uploadBodyParts);
+
+
+const uploadBodyPartsToFirestore = require('./routes/upload_body_parts_to_firestore');
+
+app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
+  try {
+    await uploadBodyPartsToFirestore();
+    res.send('✅ Body parts uploaded to Firestore successfully.');
+  } catch (error) {
+    console.error('❌ Upload failed:', error);
+    res.status(500).send('❌ Failed to upload body parts to Firestore.');
+  }
+});
+
+
 
 
 
