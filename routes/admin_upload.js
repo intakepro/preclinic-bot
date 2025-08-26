@@ -1,38 +1,38 @@
-// routes/admin_upload.js
-const express = require('express');
+// scripts/upload_body_parts_to_firestore.js
+// Version: v1.0.0
+// 功能：將 data/body_parts_tree.json 上傳到 Firestore 的 body_parts_tree/full_tree 文件
+
 const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
 
-const router = express.Router();
-
-// ✅ 初始化 Firebase（確保只初始化一次）
+// ✅ 初始化 Firestore（請確保 FIREBASE_SERVICE_ACCOUNT 環境變數已設定）
 if (!admin.apps.length) {
-  const serviceAccount = require('../serviceAccountKey.json'); // 請放在根目錄
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount),
   });
 }
+
 const db = admin.firestore();
 
-router.get('/upload-body-parts', async (req, res) => {
-  try {
-    const jsonPath = path.join(__dirname, '../body_parts.json');
-    const bodyParts = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+// ✅ 載入 JSON 資料（來自 data/body_parts_tree.json）
+const dataPath = path.join(__dirname, '../data/body_parts_tree.json');
 
-    const batch = db.batch();
-    bodyParts.forEach((part) => {
-      const docId = part.part_id || part.id || db.collection('body_parts').doc().id;
-      const docRef = db.collection('body_parts').doc(docId);
-      batch.set(docRef, part);
-    });
+if (!fs.existsSync(dataPath)) {
+  console.error('❌ 找不到 body_parts_tree.json，請確認檔案是否存在於 /data 資料夾內');
+  process.exit(1);
+}
 
-    await batch.commit();
-    res.send('✅ 上傳成功，共匯入 ' + bodyParts.length + ' 筆資料');
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('❌ 上傳失敗：' + err.message);
-  }
+const bodyPartsTree = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+
+async function uploadBodyParts() {
+  const ref = db.collection('body_parts_tree').doc('full_tree');
+  await ref.set({ tree: bodyPartsTree });
+
+  console.log('✅ 成功上傳 body_parts_tree 至 Firestore: collection=body_parts_tree, doc=full_tree');
+}
+
+uploadBodyParts().catch((err) => {
+  console.error('❌ 上傳失敗：', err);
 });
-
-module.exports = router;
