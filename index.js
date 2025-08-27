@@ -80,7 +80,14 @@ app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
 const uploadSymptomQuestions = require('./routes/upload_symptom_questions');
 app.use('/admin', uploadSymptomQuestions);
 
-
+app.get('/admin/upload_symptom_questions', (req, res) => {
+  res.send(`
+    <form action="/admin/upload_symptom_questions" method="POST" enctype="multipart/form-data">
+      <input type="file" name="file" />
+      <button type="submit">上傳</button>
+    </form>
+  `);
+});
 
 
 
