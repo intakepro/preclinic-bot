@@ -77,6 +77,11 @@ app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
 });
 
 
+const uploadSymptomQuestions = require('./routes/upload_symptom_questions');
+app.use('/admin', uploadSymptomQuestions);
+
+
+
 
 
 // Webhook 驗證（Meta 用來驗證 callback URL）
