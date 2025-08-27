@@ -1,6 +1,6 @@
 // routes/upload_symptom_questions.js
-// Version: v1.0.0
-// 功能：讀取 data/symptom_questions_all.json 檔案，逐筆寫入 Firestore 的 symptom_questions collection
+// Version: v1.0.1 (簡化版，不用 multer，不用表單)
+// 功能：從本機 JSON 檔讀取寫入 Firestore
 
 const express = require('express');
 const admin = require('firebase-admin');
@@ -13,14 +13,15 @@ const db = admin.firestore();
 router.get('/upload-symptom-questions', async (req, res) => {
   try {
     const filePath = path.join(__dirname, '../data/symptom_questions_all.json');
+
     if (!fs.existsSync(filePath)) {
       return res.status(404).send('❌ 找不到 symptom_questions_all.json 檔案');
     }
 
-    const fileContent = fs.readFileSync(filePath, 'utf8');
-    const symptoms = JSON.parse(fileContent);
+    const content = fs.readFileSync(filePath, 'utf8');
+    const symptoms = JSON.parse(content);
 
-    let uploadedCount = 0;
+    let uploaded = 0;
 
     for (const item of symptoms) {
       if (!item.symptom_id || !item.questions) continue;
@@ -28,15 +29,15 @@ router.get('/upload-symptom-questions', async (req, res) => {
       await db.collection('symptom_questions').doc(item.symptom_id).set({
         symptom_id: item.symptom_id,
         questions: item.questions,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      uploadedCount++;
+      uploaded++;
     }
 
-    res.send(`✅ 成功上傳 ${uploadedCount} 個 symptom_questions`);
-  } catch (error) {
-    console.error('❌ 上傳 symptom_questions 發生錯誤:', error);
+    res.send(`✅ 成功上傳 ${uploaded} 筆 symptom_questions`);
+  } catch (err) {
+    console.error('❌ 上傳錯誤:', err);
     res.status(500).send('❌ 上傳 symptom_questions 發生錯誤');
   }
 });
