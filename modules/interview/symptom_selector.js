@@ -1,27 +1,34 @@
 // modules/interview/symptom_selector.js
-// Version: 1.0.0
-// 功能：根據 location_id 顯示病徵清單，讓使用者選擇（通用模組）
+// Version: v2.0.0
+// 功能：根據 location_id 顯示病徵清單，讓使用者選擇，並記錄至 Firestore 給 symptom_detail 使用
 // 資料來源：data/symptoms_by_location.json
 // 使用方式：const { handleSymptomSelection } = require('./interview/symptom_selector');
 
 const fs = require('fs');
 const path = require('path');
+const admin = require('firebase-admin');
+const db = admin.firestore();
 
-// 讀取病徵清單 JSON（格式：[{ location_id: 'eye', symptoms: [...] }, ...]）
+// 🧾 調用 JSON 症狀清單
 const symptomsData = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../../data/symptoms_by_location.json'), 'utf8')
 );
 
-// 取得某個部位的病徵清單
+// 🔍 找出該部位對應的病徵
 function getSymptomList(location_id) {
   const entry = symptomsData.find((item) => item.location_id === location_id);
   return entry ? entry.symptoms : [];
 }
 
-// 主處理函式
+// 📞 提取電話
+const phoneOf = (from) =>
+  (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
+
+// 主函式：處理病徵選擇
 async function handleSymptomSelection({ from, msg, session, location_id }) {
   const bufferKey = `symptom_selector_${location_id}`;
   const symptoms = getSymptomList(location_id);
+  const phone = phoneOf(from);
 
   if (!session.buffer) session.buffer = {};
 
@@ -66,11 +73,18 @@ async function handleSymptomSelection({ from, msg, session, location_id }) {
     };
   }
 
-  // ➤ 儲存所選病徵
+  // ✅ 儲存所選病徵（暫存於 session）
   session.selectedSymptom = selected.symptom_id;
 
+  // ✅ 寫入 Firestore 給 symptom_detail.js 使用
+  await db.doc(`sessions/${phone}/interview.symptom_detail_state`).set({
+    symptom_id: selected.symptom_id,
+    index: 0,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+
   return {
-    text: `✅ 你選擇的病徵是：${selected.name_zh}（${selected.name_en}）`,
+    text: `✅ 你選擇的病徵是：${selected.name_zh}（${selected.name_en}）\n接下來會問你一些細節問題。`,
     done: true,
     selectedSymptom: selected.symptom_id
   };
