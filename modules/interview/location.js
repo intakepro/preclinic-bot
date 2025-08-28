@@ -1,86 +1,24 @@
-// modules/interview/location.js
-// Version: v1.1.2
-// 功能：支援多層選擇身體部位直到最底層，修正 session 傳入問題
+// modules/interview.js
+// Version: v2.0.1
 
-const admin = require('firebase-admin');
-const db = admin.firestore();
+const handleLocation = require('./interview/location');
 
-const COLLECTION = 'body_parts_tree';
-const SESSION_COLLECTION = 'sessions';
+async function handle({ from, msg, session }) {
+  const step = session?.step || 1;
 
-async function getChildrenParts(parentId) {
-  const ref = db.collection(COLLECTION);
-  const query = parentId
-    ? ref.where('parent_id', '==', parentId).orderBy('sort_order')
-    : ref.where('level', '==', 1).orderBy('sort_order');
-  const snap = await query.get();
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-}
-
-function formatOptions(parts) {
-  return parts.map((p, i) => `${i + 1}. ${p.name_zh}`).join('\n');
-}
-
-function getKey(from) {
-  return (from || '').toString().replace(/^whatsapp:/i, '').trim();
-}
-
-async function setSession(from, patch) {
-  const key = getKey(from);
-  const ref = db.collection(SESSION_COLLECTION).doc(key);
-  await ref.set({ ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-}
-
-async function getSession(from) {
-  const key = getKey(from);
-  const ref = db.collection(SESSION_COLLECTION).doc(key);
-  const snap = await ref.get();
-  return snap.exists ? snap.data() : {};
-}
-
-async function handleLocation({ from, msg }) {
-  const session = await getSession(from);
-  const path = session.selectedLocationPath || [];
-  const currentParentId = path.length > 0 ? path[path.length - 1].id : null;
-
-  const parts = await getChildrenParts(currentParentId);
-
-  if (!session._locationStep || session._locationStep === 'awaiting') {
-    await setSession(from, { _locationStep: 'selecting' });
+  if (step === 1) {
+    const out = await handleLocation({ from, msg });
+    const isDone = out.done || false;
     return {
-      text: `📍 請選擇你不適的身體部位：\n\n${formatOptions(parts)}\n\n請輸入數字選項，例如：1`
+      texts: Array.isArray(out.texts) ? out.texts : [out.text],
+      sessionPatch: isDone ? { step: 2 } : {}
     };
   }
-
-  const selectedIndex = parseInt(msg?.trim(), 10);
-  if (isNaN(selectedIndex) || selectedIndex < 1 || selectedIndex > parts.length) {
-    return { text: `⚠️ 請輸入有效數字，例如：1 ~ ${parts.length}` };
-  }
-
-  const selected = parts[selectedIndex - 1];
-  const newPath = [...path, selected];
-
-  const children = await getChildrenParts(selected.id);
-  if (children.length > 0) {
-    await setSession(from, {
-      selectedLocationPath: newPath,
-      _locationStep: 'awaiting'
-    });
-    return {
-      text: `📍 你選擇的是：${selected.name_zh}\n請選擇更細的部位：\n\n${formatOptions(children)}\n\n請輸入數字選項，例如：1`
-    };
-  }
-
-  await setSession(from, {
-    selectedLocationPath: newPath,
-    finalLocation: selected,
-    _locationStep: admin.firestore.FieldValue.delete()
-  });
 
   return {
-    text: `✅ 你選擇的是：${selected.name_zh}，我們會繼續問診。`,
-    done: true
+    texts: ['📌 尚未實作此步驟，請按 z 返回或等待功能上線。'],
+    done: false
   };
 }
 
-module.exports = handleLocation;
+module.exports = { handle };
