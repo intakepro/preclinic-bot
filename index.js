@@ -64,6 +64,12 @@ app.use('/admin', uploadSymptoms);
 //app.use('/admin', uploadBodyParts);
 
 
+const uploadBodyPartsRoute = require('./routes/upload_body_parts');
+app.use('/', uploadBodyPartsRoute);
+
+
+
+
 const uploadBodyPartsToFirestore = require('./routes/upload_body_parts_to_firestore');
 
 app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
