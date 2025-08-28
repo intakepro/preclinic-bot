@@ -64,16 +64,20 @@ app.use('/admin', uploadSymptoms);
 //app.use('/admin', uploadBodyParts);
 
 
-const uploadBodyPartsRoute = require('./routes/upload_body_parts');
-app.use('/', uploadBodyPartsRoute);
+const uploadBodyPartsToFirestore = require('./routers/upload_body_parts');
 
-app.get('/admin/upload_body', async (req, res) => {
+app.get('/admin/upload-body-parts', async (req, res) => {
+  const key = req.query.key;
+  if (key !== process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    return res.status(403).send('Forbidden: invalid key');
+  }
+
   try {
     await uploadBodyPartsToFirestore();
-    res.send('✅ Body parts uploaded to Firestore successfully.');
-  } catch (error) {
-    console.error('❌ Upload failed:', error);
-    res.status(500).send('❌ Failed to upload body parts to Firestore.');
+    res.send('✅ Body parts uploaded to Firestore!');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('❌ Upload failed: ' + err.message);
   }
 });
 
