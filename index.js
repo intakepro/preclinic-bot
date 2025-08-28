@@ -145,7 +145,7 @@ async function clearSelectedPatient(from) {
 
 // ===== 文案 / 觸發詞 =====
 const welcomeText = () =>
-  '👋 歡迎使用 Z 醫生問診系統，我哋而家開始啦⋯⋯😊\n\n請輸入 **z** 開始第 1 步。';
+  '👋 歡迎使用 B 醫生問診系統，我哋而家開始啦⋯⋯😊\n\n請輸入 **z** 開始第 1 步。';
 const finishText  = () =>
   '✅ 問診已完成，你的資料已傳送給醫生，謝謝你，祝你早日康復 ❤️\n（如需重新開始，請輸入「我想做預先問診」或 restart）';
 
