@@ -67,6 +67,18 @@ app.use('/admin', uploadSymptoms);
 const uploadBodyPartsRoute = require('./routes/upload_body_parts');
 app.use('/', uploadBodyPartsRoute);
 
+app.get('/admin/upload_body', async (req, res) => {
+  try {
+    await uploadBodyPartsToFirestore();
+    res.send('✅ Body parts uploaded to Firestore successfully.');
+  } catch (error) {
+    console.error('❌ Upload failed:', error);
+    res.status(500).send('❌ Failed to upload body parts to Firestore.');
+  }
+});
+
+
+
 
 
 
