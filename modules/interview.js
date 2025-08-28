@@ -1,39 +1,25 @@
-// modules/interview/interview.js
-// Version: v1.1.1
-// 修正：避免 session 為 undefined 導致錯誤
+// modules/interview.js
+// Version: v2.0.0
+// 功能：控制整個問診流程（目前處理 location 選單）
 
-const { handleLocation } = require('./interview/location');
-const { handleSymptomSelector } = require('./interview/symptom_selector');
-const { handleSymptomDetail } = require('./interview/symptom_detail');
+const { handle: handleLocation } = require('./interview/location');
 
-async function handleInterview({ from, msg, session, db }) {
-  session = session || {}; // ✅ 加入這一行修正錯誤
+async function handle({ from, msg, session }) {
+  const step = session?.step || 1;
 
-  if (!session.step || session.step === 'location') {
-    const res = await handleLocation({ from, msg, session, db });
-    if (res?.done) {
-      return { ...res, sessionUpdates: { step: 'symptom_selector' } };
-    }
-    return res;
+  if (step === 1) {
+    const out = await handleLocation({ from, msg });
+    const isDone = out.done || false;
+    return {
+      texts: Array.isArray(out.texts) ? out.texts : [out.text],
+      sessionPatch: isDone ? { step: 2 } : {}
+    };
   }
 
-  if (session.step === 'symptom_selector') {
-    const res = await handleSymptomSelector({ from, msg, session, db });
-    if (res?.done) {
-      return { ...res, sessionUpdates: { step: 'symptom_detail' } };
-    }
-    return res;
-  }
-
-  if (session.step === 'symptom_detail') {
-    const res = await handleSymptomDetail({ from, msg, session, db });
-    if (res?.done) {
-      return { ...res, sessionUpdates: { step: 'complete' } };
-    }
-    return res;
-  }
-
-  return { text: '✅ 問診流程已完成，感謝你的協助。' };
+  return {
+    texts: ['📌 尚未實作此步驟，請按 z 返回或等待功能上線。'],
+    done: false
+  };
 }
 
-module.exports = { handleInterview };
+module.exports = { handle };
