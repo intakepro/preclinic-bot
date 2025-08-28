@@ -1,14 +1,12 @@
-/**
- * Module: modules/interview.js
- * Version: v6.0.0-placeholder
- * 說明：佔位；顯示第 5 步名稱，要求按 z 進入下一步
- */
-async function handleInterview({ msg }) {
-  const ok = /^z$/i.test((msg || '').trim());
-  if (ok) return { text: '✅ 已確認進入下一步（第 5 步完成）。', done: true };
-  return {
-    text: '👉 第 5 步：問診系統模組（製作中）\n請按 z 進入下一步。',
-    done: false
-  };
+// modules/interview.js
+// Version: v1.0.0
+// 功能：作為問診模組的入口，目前只執行 location.js 模組
+
+const { handleLocation } = require('./interview/location');
+
+async function handleInterview({ from, msg, session, db }) {
+  // 呼叫 location.js 模組，並傳入必要參數
+  return await handleLocation({ from, msg, session, db });
 }
+
 module.exports = { handleInterview };
