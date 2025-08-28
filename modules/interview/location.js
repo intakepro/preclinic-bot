@@ -1,29 +1,12 @@
 // modules/interview/location.js
-// Version: v1.2.0
-// 功能：支援多層選擇身體部位直到最底層
+// Version: v1.1.2
+// 功能：支援多層選擇身體部位直到最底層，修正 session 傳入問題
 
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
 const COLLECTION = 'body_parts_tree';
 const SESSION_COLLECTION = 'sessions';
-
-function getKey(from) {
-  return (from || '').toString().replace(/^whatsapp:/i, '').trim();
-}
-
-async function getSession(from) {
-  const key = getKey(from);
-  const ref = db.collection(SESSION_COLLECTION).doc(key);
-  const snap = await ref.get();
-  return snap.exists ? snap.data() : {};
-}
-
-async function setSession(from, patch) {
-  const key = getKey(from);
-  const ref = db.collection(SESSION_COLLECTION).doc(key);
-  await ref.set({ ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-}
 
 async function getChildrenParts(parentId) {
   const ref = db.collection(COLLECTION);
@@ -38,13 +21,30 @@ function formatOptions(parts) {
   return parts.map((p, i) => `${i + 1}. ${p.name_zh}`).join('\n');
 }
 
+function getKey(from) {
+  return (from || '').toString().replace(/^whatsapp:/i, '').trim();
+}
+
+async function setSession(from, patch) {
+  const key = getKey(from);
+  const ref = db.collection(SESSION_COLLECTION).doc(key);
+  await ref.set({ ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+}
+
+async function getSession(from) {
+  const key = getKey(from);
+  const ref = db.collection(SESSION_COLLECTION).doc(key);
+  const snap = await ref.get();
+  return snap.exists ? snap.data() : {};
+}
+
 async function handleLocation({ from, msg }) {
   const session = await getSession(from);
   const path = session.selectedLocationPath || [];
   const currentParentId = path.length > 0 ? path[path.length - 1].id : null;
+
   const parts = await getChildrenParts(currentParentId);
 
-  // 初次顯示
   if (!session._locationStep || session._locationStep === 'awaiting') {
     await setSession(from, { _locationStep: 'selecting' });
     return {
@@ -59,8 +59,8 @@ async function handleLocation({ from, msg }) {
 
   const selected = parts[selectedIndex - 1];
   const newPath = [...path, selected];
-  const children = await getChildrenParts(selected.id);
 
+  const children = await getChildrenParts(selected.id);
   if (children.length > 0) {
     await setSession(from, {
       selectedLocationPath: newPath,
@@ -71,7 +71,6 @@ async function handleLocation({ from, msg }) {
     };
   }
 
-  // 最底層
   await setSession(from, {
     selectedLocationPath: newPath,
     finalLocation: selected,
@@ -84,4 +83,4 @@ async function handleLocation({ from, msg }) {
   };
 }
 
-module.exports = { handleLocation };
+module.exports = handleLocation;
