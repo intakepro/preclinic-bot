@@ -41,11 +41,11 @@ const { handleExport }    = require('./modules/export');
 
 // ===== 步驟表 =====
 const STEPS = [
-  { id: 1, key: 'name_input', name: '輸入病人名字模組', handler: handleNameInput },
+  { id: 5, key: 'name_input', name: '輸入病人名字模組', handler: handleNameInput },
   { id: 2, key: 'auth',       name: '病人問診權限檢查模組', handler: handleAuth },
   { id: 3, key: 'profile',    name: '讀取病人資料模組',     handler: handleProfile },
   { id: 4, key: 'history',    name: '讀取病人病史模組',     handler: handleHistory },
-  { id: 5, key: 'interview',  name: '問診系統模組',         handler: handleInterview },
+  { id: 1, key: 'interview',  name: '問診系統模組',         handler: handleInterview },
   { id: 6, key: 'ai_summar',  name: 'AI 整理模組',          handler: handleAiSummar },
   { id: 7, key: 'export',     name: '匯出總結模組',          handler: handleExport },
 ];
