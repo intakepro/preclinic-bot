@@ -1,12 +1,14 @@
 // modules/interview/interview.js
-// Version: v1.1.0
-// 功能：負責控制問診流程：location → symptom_selector → symptom_detail
+// Version: v1.1.1
+// 修正：避免 session 為 undefined 導致錯誤
 
 const { handleLocation } = require('./interview/location');
 const { handleSymptomSelector } = require('./interview/symptom_selector');
 const { handleSymptomDetail } = require('./interview/symptom_detail');
 
 async function handleInterview({ from, msg, session, db }) {
+  session = session || {}; // ✅ 加入這一行修正錯誤
+
   if (!session.step || session.step === 'location') {
     const res = await handleLocation({ from, msg, session, db });
     if (res?.done) {
