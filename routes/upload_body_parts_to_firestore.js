@@ -7,7 +7,7 @@ module.exports = async function uploadBodyPartsToFirestore() {
   const batch = db.batch();
 
   for (const item of bodyPartsData) {
-    const docRef = db.collection('body_parts').doc(item.id); // 建議使用 item.id 為主鍵
+    const docRef = db.collection('body_parts_tree').doc(item.id); // 建議使用 item.id 為主鍵
     batch.set(docRef, item);
   }
 
