@@ -1,7 +1,7 @@
 // modules/interview.js
 // Version: v2.0.1
 
-const handleLocation = require('./interview/location');
+const handleLocation = require('.module/interview/location');
 
 async function handle({ from, msg, session }) {
   const step = session?.step || 1;
