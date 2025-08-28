@@ -1,6 +1,6 @@
 // modules/interview/location.js
-// Version: v1.1.0
-// 功能：支援多層選擇身體部位直到最底層
+// Version: v1.1.1
+// 功能：支援多層選擇身體部位直到最底層，修正 session 傳入問題
 
 const admin = require('firebase-admin');
 const db = admin.firestore();
@@ -38,8 +38,9 @@ async function getSession(from) {
   return snap.exists ? snap.data() : {};
 }
 
-async function handleLocation({ from, msg }) {
-  const session = await getSession(from);
+async function handleLocation({ from, msg, session, db }) {
+  session = session || {};
+
   const path = session.selectedLocationPath || [];
   const currentParentId = path.length > 0 ? path[path.length - 1].id : null;
 
