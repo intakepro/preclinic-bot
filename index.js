@@ -64,7 +64,7 @@ app.use('/admin', uploadSymptoms);
 //app.use('/admin', uploadBodyParts);
 
 
-const uploadBodyParts = require('./routers/upload_body_parts');
+const uploadBodyParts = require('./routes/upload_body_parts');
 
 app.get('/admin/upload-body-parts', async (req, res) => {
   const key = req.query.key;
