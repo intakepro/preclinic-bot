@@ -1,5 +1,5 @@
 // modules/interview/location.js
-// Version: v1.1.2
+// Version: v1.1.1
 // 功能：支援多層選擇身體部位直到最底層，修正 session 傳入問題
 
 const admin = require('firebase-admin');
@@ -38,13 +38,15 @@ async function getSession(from) {
   return snap.exists ? snap.data() : {};
 }
 
-async function handleLocation({ from, msg }) {
-  const session = await getSession(from);
+async function handleLocation({ from, msg, session, db }) {
+  session = session || {};
+
   const path = session.selectedLocationPath || [];
   const currentParentId = path.length > 0 ? path[path.length - 1].id : null;
 
   const parts = await getChildrenParts(currentParentId);
 
+  // 初次顯示或等待選擇
   if (!session._locationStep || session._locationStep === 'awaiting') {
     await setSession(from, { _locationStep: 'selecting' });
     return {
@@ -60,6 +62,7 @@ async function handleLocation({ from, msg }) {
   const selected = parts[selectedIndex - 1];
   const newPath = [...path, selected];
 
+  // 查下一層是否還有子項目
   const children = await getChildrenParts(selected.id);
   if (children.length > 0) {
     await setSession(from, {
@@ -71,6 +74,7 @@ async function handleLocation({ from, msg }) {
     };
   }
 
+  // 到最底層了，結束 location
   await setSession(from, {
     selectedLocationPath: newPath,
     finalLocation: selected,
@@ -83,4 +87,4 @@ async function handleLocation({ from, msg }) {
   };
 }
 
-module.exports = handleLocation;
+module.exports = { handleLocation };
