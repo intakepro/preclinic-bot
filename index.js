@@ -57,6 +57,11 @@ app.use(bodyParser.urlencoded({ extended: false }));
 const uploadSymptoms = require('./routes/upload-symptoms');
 app.use('/admin', uploadSymptoms);
 
+
+const uploadSymptomsByLocation = require('./routes/upload_symptoms_by_location');
+app.use('/admin', uploadSymptomsByLocation);
+
+
 // const uploadBodyParts = require('./routes/upload_body_parts_to_firestore');
 // app.use('/admin', uploadBodyParts);
 
