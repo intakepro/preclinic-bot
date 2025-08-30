@@ -1,93 +1,183 @@
 // modules/interview/symptom_selector.js
-// Version: v2.0.0
-// 功能：根據 location_id 顯示病徵清單，讓使用者選擇，並記錄至 Firestore 給 symptom_detail 使用
-// 資料來源：data/symptoms_by_location.json
-// 使用方式：const { handleSymptomSelection } = require('./interview/symptom_selector');
+// Version: v1.1.0
+// 變更：加入「◀️ 上一頁 / ▶️ 下一頁」控制；保留 0=返回部位選擇
 
-const fs = require('fs');
-const path = require('path');
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// 🧾 調用 JSON 症狀清單
-const symptomsData = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../../data/symptoms_by_location.json'), 'utf8')
-);
+const SESSIONS = 'sessions';
+const SYMPTOMS_COLL = 'symptoms_by_location';
 
-// 🔍 找出該部位對應的病徵
-function getSymptomList(location_id) {
-  const entry = symptomsData.find((item) => item.location_id === location_id);
-  return entry ? entry.symptoms : [];
+const PAGE_SIZE = parseInt(process.env.SYMPTOM_PAGE_SIZE || '8', 10);
+
+const keyOf = (from) => (from || '').toString().replace(/^whatsapp:/i, '').trim();
+
+async function getSession(from) {
+  const ref = db.collection(SESSIONS).doc(keyOf(from));
+  const snap = await ref.get();
+  return snap.exists ? (snap.data() || {}) : {};
+}
+async function setSession(from, patch) {
+  const ref = db.collection(SESSIONS).doc(keyOf(from));
+  await ref.set({ ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
 }
 
-// 📞 提取電話
-const phoneOf = (from) =>
-  (from || '').toString().replace(/^whatsapp:/i, '').trim() || 'DEFAULT';
+// 取得某部位的症狀（同時支援兩種資料結構；內建索引 fallback）
+async function fetchSymptomsByLocation(locationId) {
+  const col = db.collection(SYMPTOMS_COLL);
 
-// 主函式：處理病徵選擇
-async function handleSymptomSelection({ from, msg, session, location_id }) {
-  const bufferKey = `symptom_selector_${location_id}`;
-  const symptoms = getSymptomList(location_id);
-  const phone = phoneOf(from);
-
-  if (!session.buffer) session.buffer = {};
-
-  // ➤ 初次進入顯示清單
-  if (!msg || msg.trim() === '') {
-    if (!symptoms.length) {
-      return {
-        text: `❌ 系統內無「${location_id}」對應的病徵資料，請聯絡管理員處理。`,
-        done: true
-      };
+  // 方案 a：每個症狀一筆文件（where + orderBy）
+  try {
+    let q = col.where('location_id', '==', locationId).orderBy('sort_order');
+    const snap = await q.get();
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (rows.length > 0) return rows;
+  } catch (e) {
+    const msg = String(e && e.message || '');
+    if (e.code === 9 || msg.includes('FAILED_PRECONDITION') || msg.includes('requires an index')) {
+      // 索引未建：降級為不排序查詢 + 內存排序
+      const q = col.where('location_id', '==', locationId);
+      const snap = await q.get();
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      rows.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      if (rows.length > 0) return rows;
+    } else {
+      throw e;
     }
-
-    session.buffer[bufferKey] = { symptoms };
-
-    let text = `👁️ 請問你在「${location_id}」部位感覺到什麼症狀？請輸入號碼選擇：`;
-    symptoms.forEach((symptom, i) => {
-      text += `\n${i + 1}️⃣ ${symptom.name_zh}`;
-    });
-    text += `\n\n0️⃣ 返回上一層`;
-    return { text, done: false };
   }
 
-  // ➤ 使用者輸入處理
-  const choice = parseInt(msg);
-  if (isNaN(choice)) {
-    return { text: `⚠️ 請輸入對應的數字。`, done: false };
+  // 方案 b：每個部位一筆文件，內含 symptoms 陣列
+  const doc = await col.doc(locationId).get();
+  if (doc.exists) {
+    const data = doc.data() || {};
+    const rows = Array.isArray(data.symptoms) ? data.symptoms.slice() : [];
+    rows.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    return rows;
   }
 
-  if (choice === 0) {
+  return [];
+}
+
+function pageSlice(items, page, pageSize = PAGE_SIZE) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, page), pages);
+  const start = (safePage - 1) * pageSize;
+  const end = Math.min(start + pageSize, total);
+  return {
+    list: items.slice(start, end),
+    page: safePage,
+    pages,
+    total
+  };
+}
+
+// 計算上一頁/下一頁的數字索引位置
+function navIndices(listLength, hasPrev, hasNext) {
+  let idxPrev = null;
+  let idxNext = null;
+  let base = listLength;
+  if (hasPrev) { idxPrev = base + 1; base += 1; }
+  if (hasNext) { idxNext = base + 1; }
+  return { idxPrev, idxNext };
+}
+
+function formatOptions(list, hasPrev, hasNext) {
+  const lines = list.map((s, i) => `${i + 1}. ${s.name_zh || s.name || s.id}`);
+  const { idxPrev, idxNext } = navIndices(list.length, hasPrev, hasNext);
+  if (idxPrev) lines.push(`${idxPrev}. ◀️ 上一頁`);
+  if (idxNext) lines.push(`${idxNext}. ▶️ 下一頁`);
+  lines.push(`0. ↩️ 返回部位選擇`);
+  return lines.join('\n');
+}
+
+async function handleSymptomSelector({ from, msg }) {
+  const ses = await getSession(from);
+
+  // 取得最終部位；若無，導回 location
+  const finalLoc = ses.finalLocation || (Array.isArray(ses.selectedLocationPath) ? ses.selectedLocationPath[ses.selectedLocationPath.length - 1] : null);
+  if (!finalLoc || !finalLoc.id) {
+    await setSession(from, { interview_step: 'location' });
+    return { text: '⚠️ 未找到已選部位，已返回部位選擇。', done: false };
+  }
+
+  const all = await fetchSymptomsByLocation(finalLoc.id);
+
+  // 無預設清單 → 允許自由輸入
+  if (!all || all.length === 0) {
+    const raw = (msg || '').trim();
+    if (raw && !/^\d+$/.test(raw)) {
+      const custom = { id: 'custom', name_zh: raw, custom: true, location_id: finalLoc.id };
+      await setSession(from, { selectedSymptom: custom });
+      return { text: `✅ 已記錄症狀：「${raw}」`, done: true, selectedSymptom: custom };
+    }
     return {
-      text: `🔙 返回上一層。請重新選擇身體部位。`,
-      done: true,
-      nextStep: 'location'
-    };
-  }
-
-  const selected = session.buffer?.[bufferKey]?.symptoms?.[choice - 1];
-  if (!selected) {
-    return {
-      text: `❌ 無效選項，請重新輸入正確號碼。`,
+      text: [
+        `📝 這個部位（${finalLoc.name_zh || finalLoc.id}）暫未有預設症狀清單。`,
+        '請直接輸入你的症狀描述（例如：刺痛、灼熱、腫脹⋯⋯）',
+      ].join('\n'),
       done: false
     };
   }
 
-  // ✅ 儲存所選病徵（暫存於 session）
-  session.selectedSymptom = selected.symptom_id;
+  const currentPage = Number.isInteger(ses.symptomSelectorPage) ? ses.symptomSelectorPage : 1;
+  const { list, page, pages } = pageSlice(all, currentPage);
 
-  // ✅ 寫入 Firestore 給 symptom_detail.js 使用
-  await db.doc(`sessions/${phone}/interview.symptom_detail_state`).set({
-    symptom_id: selected.symptom_id,
-    index: 0,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  });
+  const raw = (msg || '').trim();
+  const isNum = /^\d+$/.test(raw);
+  const n = isNum ? parseInt(raw, 10) : NaN;
 
+  const hasPrev = page > 1;
+  const hasNext = page < pages;
+  const { idxPrev, idxNext } = navIndices(list.length, hasPrev, hasNext);
+
+  // 0 = 返回部位選擇
+  if (isNum && n === 0) {
+    await setSession(from, { interview_step: 'location', symptomSelectorPage: 1, selectedSymptom: admin.firestore.FieldValue.delete() });
+    return { text: '↩️ 已返回部位選擇。', done: false };
+  }
+
+  // ◀️ 上一頁
+  if (isNum && idxPrev && n === idxPrev) {
+    const prevPage = page - 1;
+    await setSession(from, { symptomSelectorPage: prevPage });
+    const prev = pageSlice(all, prevPage);
+    return {
+      text: `📋 請選擇症狀（${prev.page}/${prev.pages}）：\n\n` +
+            `${formatOptions(prev.list, prev.page > 1, prev.page < prev.pages)}\n\n` +
+            `請輸入數字選項，例如：1`,
+      done: false
+    };
+  }
+
+  // ▶️ 下一頁
+  if (isNum && idxNext && n === idxNext) {
+    const nextPage = page + 1;
+    await setSession(from, { symptomSelectorPage: nextPage });
+    const next = pageSlice(all, nextPage);
+    return {
+      text: `📋 請選擇症狀（${next.page}/${next.pages}）：\n\n` +
+            `${formatOptions(next.list, next.page > 1, next.page < next.pages)}\n\n` +
+            `請輸入數字選項，例如：1`,
+      done: false
+    };
+  }
+
+  // 選擇當頁症狀
+  if (isNum && n >= 1 && n <= list.length) {
+    const chosen = list[n - 1];
+    await setSession(from, { selectedSymptom: chosen, symptomSelectorPage: 1 });
+    return { text: `✅ 你選擇的症狀：${chosen.name_zh || chosen.name || chosen.id}`, done: true, selectedSymptom: chosen };
+  }
+
+  // 顯示當頁
+  await setSession(from, { symptomSelectorPage: page });
   return {
-    text: `✅ 你選擇的病徵是：${selected.name_zh}（${selected.name_en}）\n接下來會問你一些細節問題。`,
-    done: true,
-    selectedSymptom: selected.symptom_id
+    text: `📋 請選擇症狀（${page}/${pages}）：\n\n` +
+          `${formatOptions(list, hasPrev, hasNext)}\n\n` +
+          `請輸入數字選項，例如：1`,
+    done: false
   };
 }
 
-module.exports = { handleSymptomSelection };
+module.exports = { handleSymptomSelector };
