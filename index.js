@@ -1,7 +1,6 @@
 // index.js
-// Version: v6.4.6-fs
-// 修正：模組回傳 texts 陣列時會逐則輸出；不再出現選了病人卻沒回覆的沉默問題。
-// 保留 v6.4.4-fs 的流程邏輯（z 開始、restart/「我想做預先問診」重設、完成後 step=-1 靜默）。
+// Version: v6.5.0-reset
+// 變更：加入 hardResetSession，確保 restart、/restart、啟動詞、以及 z 開始時，全面清乾淨上次的 session 狀態。
 
 'use strict';
 
@@ -54,24 +53,19 @@ const STEPS = [
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// 🔧 管理端上傳路由（支援 GET 上傳 JSON 到 Firestore）
-
+// 🔧 管理端上傳路由
 const uploadSymptoms = require('./routes/upload-symptoms');
 app.use('/admin', uploadSymptoms);
 
-
-//const uploadBodyParts = require('./routes/upload_body_parts_to_firestore');
-//app.use('/admin', uploadBodyParts);
-
+// const uploadBodyParts = require('./routes/upload_body_parts_to_firestore');
+// app.use('/admin', uploadBodyParts);
 
 const uploadBodyParts = require('./routes/upload_body_parts');
-
 app.get('/admin/upload-body-parts', async (req, res) => {
   const key = req.query.key;
   if (key !== process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     return res.status(403).send('Forbidden: invalid key');
   }
-
   try {
     await uploadBodyPartsToFirestore();
     res.send('✅ Body parts uploaded to Firestore!');
@@ -81,14 +75,8 @@ app.get('/admin/upload-body-parts', async (req, res) => {
   }
 });
 
-
-
-
-
-
 const uploadBodyPartsToFirestore = require('./routes/upload_body_parts_to_firestore');
-
-app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
+app.get('/admin/upload_body_parts_to_firestore', async (_req, res) => {
   try {
     await uploadBodyPartsToFirestore();
     res.send('✅ Body parts uploaded to Firestore successfully.');
@@ -98,22 +86,18 @@ app.get('/admin/upload_body_parts_to_firestore', async (req, res) => {
   }
 });
 
-
 const uploadSymptomQuestions = require('./routes/upload_symptom_questions');
 app.use('/admin', uploadSymptomQuestions);
 
 const clearSymptomQuestions = require('./routes/clear_symptom_questions');
 app.use('/admin', clearSymptomQuestions);
 
-
 // Webhook 驗證（Meta 用來驗證 callback URL）
 app.get('/whatsapp', (req, res) => {
   const verifyToken = 'iloveprime'; // 🔒要與 Meta 設定的一致
-
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
-
   if (mode && token && mode === 'subscribe' && token === verifyToken) {
     console.log('[Webhook] Meta webhook verified');
     res.status(200).send(challenge);
@@ -121,13 +105,6 @@ app.get('/whatsapp', (req, res) => {
     res.sendStatus(403);
   }
 });
-
-
-
-
-
-
-
 
 // ===== Session（Firestore）=====
 const phoneOf = (from) =>
@@ -159,6 +136,33 @@ async function clearSelectedPatient(from) {
   await setSession(from, { selectedPatient: admin.firestore.FieldValue.delete() });
 }
 
+// ✅ Reset：把所有可能殘留的問診狀態一次清光
+async function hardResetSession(from, nextStep = 0) {
+  const del = admin.firestore.FieldValue.delete();
+  await setSession(from, {
+    // 全域流程
+    step: nextStep,                   // 0=歡迎；1=interview；將來要改回 name_input 就把這裡改為 5
+    interview_step: del,
+
+    // location
+    selectedLocationPath: del,
+    finalLocation: del,
+    _locationStep: del,
+
+    // symptom selector
+    selectedSymptom: del,
+    symptomSelectorPage: del,
+
+    // symptom detail
+    symptomDetail: del,
+
+    // 其他模組暫存（按需保留/擴充）
+    selectedPatient: del,
+    _nameStep: del,
+    _historyStep: del,
+  });
+}
+
 // ===== 文案 / 觸發詞 =====
 const welcomeText = () =>
   '👋 歡迎使用 B 醫生問診系統，我哋而家開始啦⋯⋯😊\n\n請輸入 **z** 開始第 1 步。';
@@ -167,6 +171,7 @@ const finishText  = () =>
 
 const containsStartPhrase = (s='') => /我想做預先問診/i.test(s);
 const isZ = (s='') => s.trim().toLowerCase() === 'z';
+const isRestart = (s='') => /^\/?restart$/i.test(s.trim());
 
 // 把模組回傳統一成陣列
 function toArrayTexts(out) {
@@ -222,10 +227,9 @@ app.post('/whatsapp', async (req, res) => {
   const body = (req.body.Body || '').toString().trim();
   let step = await getStep(from);
 
-  // A) 任何時刻：啟動詞或 restart -> 重設到歡迎
-  if (containsStartPhrase(body) || /^restart$/i.test(body)) {
-    await clearSelectedPatient(from);
-    await setStep(from, 0);
+  // A) 任何時刻：啟動詞或 restart -> 全面重設回歡迎
+  if (containsStartPhrase(body) || isRestart(body)) {
+    await hardResetSession(from, 0);   // 歸零到歡迎畫面
     console.log('[DEBUG] RESET -> step=0 (WELCOME)');
     const tw = new MessagingResponse();
     tw.message(welcomeText());
@@ -242,8 +246,9 @@ app.post('/whatsapp', async (req, res) => {
   if (step === 0) {
     const tw = new MessagingResponse();
     if (isZ(body)) {
-      await setStep(from, 1);
-      console.log('[DEBUG] WELCOME -> z，設定 step=1，觸發第一步（不自動前進）');
+      // ✅ 開始前先清乾淨上次狀態，再直接進入第 1 步
+      await hardResetSession(from, 1); // 將 step 設為 1，並清空所有暫存
+      console.log('[DEBUG] WELCOME -> z，硬重設並設定 step=1，觸發第一步');
       const r1 = await runStep(1, { msg: '', from });
       const texts = r1.texts || [];
       if (texts.length) {
@@ -302,7 +307,7 @@ app.post('/whatsapp', async (req, res) => {
 });
 
 // 健康檢查
-app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.4.6-fs'));
+app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.5.0-reset'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on :${PORT}`));
