@@ -4,7 +4,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 
 const router = express.Router();
-router.get('/upload-symptoms-master', async (req, res) => {
+router.get('/upload-symptoms', async (req, res) => {
   try {
     if (req.query.key !== process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       return res.status(403).send('Forbidden');
