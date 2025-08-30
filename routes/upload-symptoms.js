@@ -1,33 +1,26 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const admin = require('firebase-admin');
+// routes/upload_body_parts.js
+// 功能：透過網址路由觸發上傳 body_parts_tree_fixed_final.json 到 Firestore
 
+const express = require('express');
 const router = express.Router();
-router.get('/upload-symptoms', async (req, res) => {
+const admin = require('firebase-admin');
+const bodyPartsData = require('../data/body_parts_tree_fixed_final.json'); // ✅ 確保路徑正確
+
+router.get('/upload-body-parts', async (req, res) => {
   try {
-    if (req.query.key !== process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      return res.status(403).send('Forbidden');
-    }
-    const filePath = path.join(__dirname, '..', 'data', 'symptoms_by_location.json');
-    const json = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const db = admin.firestore();
     const batch = db.batch();
 
-    json.forEach(row => {
-      const ref = db.collection('symptoms').doc(String(row.id));
-      batch.set(ref, {
-        name_zh: row.name_zh || row.name_en || row.id,
-        name_en: row.name_en || null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-    });
+    for (const item of bodyPartsData) {
+      const docRef = db.collection('body_parts_tree').doc(item.id);
+      batch.set(docRef, item);
+    }
 
     await batch.commit();
-    res.send(`✅ Uploaded ${json.length} symptoms to master 'symptoms' collection.`);
-  } catch (e) {
-    console.error(e);
-    res.status(500).send('❌ ' + (e.message || e));
+    res.send('✅ Body parts uploaded to Firestore.');
+  } catch (error) {
+    console.error('❌ 上傳失敗:', error);
+    res.status(500).send('❌ 上傳失敗：' + error.message);
   }
 });
 
