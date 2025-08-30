@@ -1,6 +1,7 @@
 // index.js
-// Version: v6.5.0-reset
-// 變更：加入 hardResetSession，確保 restart、/restart、啟動詞、以及 z 開始時，全面清乾淨上次的 session 狀態。
+// Version: v6.5.1-resetplus
+// 變更：hardResetSession 擴大清除範圍（含 interview_stage、selectedLocation、selectedSymptoms、symptom_detail、consent 等）。
+//       在 restart/啟動詞 及 歡迎畫面的 z 觸發時，先做硬重設，確保每次都由部位選擇開始。
 
 'use strict';
 
@@ -40,7 +41,7 @@ const { handleExport }    = require('./modules/export');
 
 // ===== 步驟表 =====
 const STEPS = [
-  { id: 5, key: 'name_input', name: '輸入病人名字模組', handler: handleNameInput },
+  { id: 5, key: 'name_input', name: '輸入病人名字模組',     handler: handleNameInput },
   { id: 2, key: 'auth',       name: '病人問診權限檢查模組', handler: handleAuth },
   { id: 3, key: 'profile',    name: '讀取病人資料模組',     handler: handleProfile },
   { id: 4, key: 'history',    name: '讀取病人病史模組',     handler: handleHistory },
@@ -57,10 +58,8 @@ app.use(bodyParser.urlencoded({ extended: false }));
 const uploadSymptoms = require('./routes/upload-symptoms');
 app.use('/admin', uploadSymptoms);
 
-
 const uploadSymptomsByLocation = require('./routes/upload_symptoms_by_location');
 app.use('/admin', uploadSymptomsByLocation);
-
 
 // const uploadBodyParts = require('./routes/upload_body_parts_to_firestore');
 // app.use('/admin', uploadBodyParts);
@@ -141,25 +140,33 @@ async function clearSelectedPatient(from) {
   await setSession(from, { selectedPatient: admin.firestore.FieldValue.delete() });
 }
 
-// ✅ Reset：把所有可能殘留的問診狀態一次清光
+// ✅ Reset：把所有可能殘留的問診狀態一次清光（包含正確/舊 key）
 async function hardResetSession(from, nextStep = 0) {
   const del = admin.firestore.FieldValue.delete();
   await setSession(from, {
     // 全域流程
-    step: nextStep,                   // 0=歡迎；1=interview；將來要改回 name_input 就把這裡改為 5
-    interview_step: del,
+    step: nextStep,                  // 0=歡迎；1=interview（現階段直接測試問診模組）
+    interview_stage: 'location',     // 強制由「部位選擇」開始
+    interview_step: del,             // 舊 key，清除
 
-    // location
+    // location（全清）
+    selectedLocation: del,
     selectedLocationPath: del,
     finalLocation: del,
     _locationStep: del,
+    location: del,                   // 可能的舊容器
 
     // symptom selector
+    selectedSymptoms: del,
     selectedSymptom: del,
-    symptomSelectorPage: del,
+    symptomSelectorPage: 1,          // 重置到第 1 頁
 
-    // symptom detail
+    // symptom detail（使用正確 key + 清舊 key）
+    symptom_detail: del,
     symptomDetail: del,
+
+    // 後續同意旗標
+    consent: del,
 
     // 其他模組暫存（按需保留/擴充）
     selectedPatient: del,
@@ -312,7 +319,7 @@ app.post('/whatsapp', async (req, res) => {
 });
 
 // 健康檢查
-app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.5.0-reset'));
+app.get('/', (_req, res) => res.send('PreDoctor flow server running. v6.5.1-resetplus'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on :${PORT}`));
