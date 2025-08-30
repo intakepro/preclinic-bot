@@ -1,27 +1,12 @@
-// modules/interview.js
-// Version: v1.2.1
-// 與 index.js 相容：index 只傳 {from, msg}；本模組自行管理 Firestore sessions.interview_step
-// 流程：location(多層) → symptom_selector → symptom_detail → done
+// modules/interview/location.js
+// Version: v1.2.1  (add index-safe fallback)
 
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-// 依你的專案結構：location/symptom 檔案位於 modules/interview/ 底下
-const { handleLocation } = require('./interview/location');
+const COLLECTION = 'body_parts_tree';
+const SESSIONS   = 'sessions';
 
-// 安全載入（未實作時不會炸掉）
-let handleSymptomSelector = async () => ({ text: '🧪 症狀選擇模組未接線，暫時跳過。', done: true });
-let handleSymptomDetail   = async () => ({ text: '🧪 症狀細節模組未接線，暫時完成。', done: true });
-try {
-  const modSel = require('./interview/symptom_selector');
-  if (typeof modSel.handleSymptomSelector === 'function') handleSymptomSelector = modSel.handleSymptomSelector;
-} catch (_) {}
-try {
-  const modDet = require('./interview/symptom_detail');
-  if (typeof modDet.handleSymptomDetail === 'function') handleSymptomDetail = modDet.handleSymptomDetail;
-} catch (_) {}
-
-const SESSIONS = 'sessions';
 const keyOf = (from) => (from || '').toString().replace(/^whatsapp:/i, '').trim();
 
 async function getSession(from) {
@@ -34,44 +19,74 @@ async function setSession(from, patch) {
   await ref.set({ ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
 }
 
-async function handleInterview({ from, msg }) {
-  const ses = await getSession(from);
-  const step = ses.interview_step || 'location';
-
-  // 1) 位置（可多層直到最底層）
-  if (step === 'location') {
-    const r = await handleLocation({ from, msg }); // location.js 自行管理 selectedLocationPath
-    if (r?.done) {
-      // 底層已選定，但整個問診還沒結束 → 切換到症狀階段（index 仍停在 interview）
-      await setSession(from, { interview_step: 'symptom_selector', finalLocation: r.finalLocation || ses.finalLocation });
-      return { text: r.text, done: false };
+// ⬇️ 索引安全的子節點查詢
+async function getChildrenSafe(parentId) {
+  const col = db.collection(COLLECTION);
+  try {
+    let q = parentId ? col.where('parent_id', '==', parentId)
+                     : col.where('level', '==', 1);
+    q = q.orderBy('sort_order');
+    const snap = await q.get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    const msg = String(e && e.message || '');
+    // 索引未建好 → 降級處理：不排序查詢 + 內存排序
+    if (e.code === 9 || msg.includes('FAILED_PRECONDITION') || msg.includes('requires an index')) {
+      console.warn('[location] Missing index, using fallback sort in memory.');
+      const q = parentId ? col.where('parent_id', '==', parentId)
+                         : col.where('level', '==', 1);
+      const snap = await q.get();
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      rows.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      return rows;
     }
-    return r;
+    throw e; // 其他錯誤照拋
   }
-
-  // 2) 症狀選擇
-  if (step === 'symptom_selector') {
-    const r = await handleSymptomSelector({ from, msg });
-    if (r?.done) {
-      await setSession(from, { interview_step: 'symptom_detail', selectedSymptom: r.selectedSymptom || null });
-      return { text: r.text, done: false };
-    }
-    return r;
-  }
-
-  // 3) 症狀細節
-  if (step === 'symptom_detail') {
-    const r = await handleSymptomDetail({ from, msg });
-    if (r?.done) {
-      await setSession(from, { interview_step: 'complete', symptomDetail: r.detail || null });
-      return { text: r.text, done: true }; // ✅ 只有這裡才讓 index 前進到下一全域模組
-    }
-    return r;
-  }
-
-  // 修復未知狀態
-  await setSession(from, { interview_step: 'location' });
-  return { text: '已回到位置選擇，請選擇你的不適部位。', done: false };
 }
 
-module.exports = { handleInterview };
+const fmt = (parts, showBack) => {
+  const lines = parts.map((p, i) => `${i + 1}. ${p.name_zh}`);
+  if (showBack) lines.push('0. ↩️ 返回上一層');
+  return lines.join('\n');
+};
+
+async function handleLocation({ from, msg }) {
+  const ses = await getSession(from);
+  const path = Array.isArray(ses.selectedLocationPath) ? ses.selectedLocationPath : [];
+  const parentId = path.length ? path[path.length - 1].id : null;
+
+  const parts = await getChildrenSafe(parentId);
+
+  const raw = (msg || '').trim();
+  const n = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+
+  // 0 = 返回上一層
+  if (!Number.isNaN(n) && n === 0 && path.length > 0) {
+    const newPath = path.slice(0, -1);
+    await setSession(from, { selectedLocationPath: newPath });
+    const pid = newPath.length ? newPath[newPath.length - 1].id : null;
+    const siblings = await getChildrenSafe(pid);
+    return { text: `↩️ 已返回上一層。\n請選擇：\n\n${fmt(siblings, newPath.length > 0)}\n\n請輸入數字，例如：1` };
+  }
+
+  // 1..N 有效選擇
+  if (!Number.isNaN(n) && n >= 1 && n <= parts.length) {
+    const selected = parts[n - 1];
+    const newPath = [...path, selected];
+    const kids = await getChildrenSafe(selected.id);
+
+    if (kids.length > 0) {
+      await setSession(from, { selectedLocationPath: newPath });
+      return { text: `📍 你選擇的是：${selected.name_zh}\n請選擇更細部位：\n\n${fmt(kids, true)}\n\n請輸入數字，例如：1` };
+    }
+
+    // 最底層
+    await setSession(from, { selectedLocationPath: newPath, finalLocation: selected });
+    return { text: `✅ 你選擇的是：${selected.name_zh}，我們會繼續問診。`, done: true, finalLocation: selected };
+  }
+
+  // 非有效輸入 → 顯示本層
+  return { text: `📍 請選擇你不適的身體部位：\n\n${fmt(parts, path.length > 0)}\n\n請輸入數字，例如：1` };
+}
+
+module.exports = { handleLocation };
