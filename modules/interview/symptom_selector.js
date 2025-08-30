@@ -1,23 +1,19 @@
 // modules/interview/symptom_selector.js
-// Version: v2.0.0 (multi-select)
-// 功能：症狀多選（跨頁保留），完成後回傳 done:true 並寫入 selectedSymptoms（陣列）與 selectedSymptom（第一項，向後相容）
+// Version: v2.1.0 (multi-select + batch input)
+// 變更重點：支援以「, ， ; ； 、 空格」分隔的多個數字，批次勾選/取消（例如：1,3,5）
 //
 // 資料來源優先序：
 //   1) symptoms_by_location/{location_id}.symptoms  （建議使用；免索引）
 //   2) symptoms_by_location（flat 每症狀一筆）：where('location_id','==',X).orderBy('sort_order')（有索引更佳）
 //   3) body_parts_tree/{location_id}.related_symptom_ids → 再至 symptoms 主表補中文名
-//
-// Firestore 建議索引（僅當你用 flat 結構時需要）：
-//   collection: symptoms_by_location
-//   fields: location_id ASC, sort_order ASC
 
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
-const SESSIONS           = 'sessions';
-const SYMPTOMS_COLL      = 'symptoms_by_location';
-const BODY_PARTS_COLL    = 'body_parts_tree';
-const SYMPTOMS_MASTER    = 'symptoms';
+const SESSIONS        = 'sessions';
+const SYMPTOMS_COLL   = 'symptoms_by_location';
+const BODY_PARTS_COLL = 'body_parts_tree';
+const SYMPTOMS_MASTER = 'symptoms';
 
 const PAGE_SIZE = parseInt(process.env.SYMPTOM_PAGE_SIZE || '8', 10);
 const keyOf = (from) => (from || '').toString().replace(/^whatsapp:/i, '').trim();
@@ -92,17 +88,11 @@ async function fetchFromBodyPartsMapping(locationId) {
 }
 
 async function fetchSymptomsByLocation(locationId) {
-  // 1) Doc 陣列（最穩定）
   const a = await fetchByDocArray(locationId);
   if (a.length) return a;
-
-  // 2) Flat
   const b = await fetchByFlatCollection(locationId);
   if (b.length) return b;
-
-  // 3) Fallback by mapping
-  const c = await fetchFromBodyPartsMapping(locationId);
-  return c;
+  return await fetchFromBodyPartsMapping(locationId);
 }
 
 function pageSlice(items, page, pageSize = PAGE_SIZE) {
@@ -115,7 +105,6 @@ function pageSlice(items, page, pageSize = PAGE_SIZE) {
 }
 
 function idxMap(listLength, hasPrev, hasNext) {
-  // 回傳各個控制項的編號
   // 1..listLength → 勾選/取消
   // 之後依序：◀️ 上一頁、▶️ 下一頁、🧹 清除、✅ 完成、0 返回
   let base = listLength;
@@ -149,6 +138,18 @@ function uniqById(arr) {
     out.push(x);
   }
   return out;
+}
+
+// 解析「多個數字」的輸入：支持 , ， ; ； 、 空格
+function parseMultiNumbers(raw) {
+  const parts = (raw || '')
+    .split(/[,，;；、\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => parseInt(s, 10))
+    .filter(n => Number.isInteger(n));
+  // 去重
+  return Array.from(new Set(parts));
 }
 
 async function handleSymptomSelector({ from, msg }) {
@@ -191,11 +192,11 @@ async function handleSymptomSelector({ from, msg }) {
 
   // 解析輸入
   const raw = (msg || '').trim();
-  const isNum = /^\d+$/.test(raw);
-  const n = isNum ? parseInt(raw, 10) : NaN;
+  const nums = parseMultiNumbers(raw);
+  const singleNum = (nums.length === 1) ? nums[0] : null;
 
   // 0 = 返回部位選擇（並清空已選）
-  if (isNum && n === 0) {
+  if (singleNum === 0) {
     await setSession(from, {
       interview_step: 'location',
       selectedSymptom: admin.firestore.FieldValue.delete(),
@@ -205,93 +206,99 @@ async function handleSymptomSelector({ from, msg }) {
     return { text: '↩️ 已返回部位選擇。', done: false };
   }
 
-  // ◀️ 上一頁
-  if (isNum && idxPrev && n === idxPrev) {
-    const prev = cur - 1;
-    await setSession(from, { symptomSelectorPage: prev });
-    const prevSlice = pageSlice(all, prev);
-    return {
-      text: `📋 請選擇症狀（${prevSlice.page}/${prevSlice.pages}）：\n\n` +
-            `${fmtList(prevSlice.list, selectedIds, prevSlice.page > 1, prevSlice.page < prevSlice.pages)}\n\n` +
-            `👉 請輸入數字：1..${prevSlice.list.length} 勾選/取消；或選「✅ 完成」送出。`,
-      done: false
-    };
-  }
+  // ◀️ 上一頁 / ▶️ 下一頁 / 🧹 清除 / ✅ 完成（只在「單一數字」時觸發，避免混用）
+  if (nums.length === 1) {
+    const n = singleNum;
 
-  // ▶️ 下一頁
-  if (isNum && idxNext && n === idxNext) {
-    const next = cur + 1;
-    await setSession(from, { symptomSelectorPage: next });
-    const nextSlice = pageSlice(all, next);
-    return {
-      text: `📋 請選擇症狀（${nextSlice.page}/${nextSlice.pages}）：\n\n` +
-            `${fmtList(nextSlice.list, selectedIds, nextSlice.page > 1, nextSlice.page < nextSlice.pages)}\n\n` +
-            `👉 請輸入數字：1..${nextSlice.list.length} 勾選/取消；或選「✅ 完成」送出。`,
-      done: false
-    };
-  }
-
-  // 🧹 清除已選
-  if (isNum && n === idxClear) {
-    await setSession(from, { selectedSymptoms: [], selectedSymptom: admin.firestore.FieldValue.delete() });
-    const freshSet = new Set();
-    return {
-      text: `🧹 已清除已選。\n\n📋 請選擇症狀（${cur}/${pages}）：\n\n` +
-            `${fmtList(list, freshSet, hasPrev, hasNext)}\n\n` +
-            `👉 請輸入數字：1..${list.length} 勾選/取消；或選「✅ 完成」送出。`,
-      done: false
-    };
-  }
-
-  // ✅ 完成送出（需至少選 1 項）
-  if (isNum && n === idxDone) {
-    if (selected.length === 0) {
-      return { text: '⚠️ 請先至少勾選一項，再選「✅ 完成」。', done: false };
-    }
-    const unique = uniqById(selected);
-    await setSession(from, {
-      selectedSymptoms: unique,
-      selectedSymptom: unique[0] || null, // 供舊流程相容
-      symptomSelectorPage: 1
-    });
-    const names = unique.map(x => x.name_zh || x.id).join('、');
-    return { text: `✅ 你選擇的症狀：${names}`, done: true, selectedSymptom: unique[0] || null };
-  }
-
-  // 1..N 勾選/取消
-  if (isNum && n >= 1 && n <= list.length) {
-    const item = list[n - 1];
-    if (selectedIds.has(item.id)) {
-      // 取消
-      const newSel = selected.filter(x => x.id !== item.id);
-      await setSession(from, { selectedSymptoms: newSel, selectedSymptom: newSel[0] || admin.firestore.FieldValue.delete() });
-      const newSet = new Set(newSel.map(x => x.id));
+    if (idxPrev && n === idxPrev) {
+      const prev = cur - 1;
+      await setSession(from, { symptomSelectorPage: prev });
+      const prevSlice = pageSlice(all, prev);
       return {
-        text: `☑️ 已取消：${item.name_zh}\n\n📋 請繼續選擇（${cur}/${pages}）：\n\n` +
-              `${fmtList(list, newSet, hasPrev, hasNext)}\n\n` +
-              `👉 可多選；選「✅ 完成」送出。`,
-        done: false
-      };
-    } else {
-      // 勾選
-      const newSel = uniqById([...selected, { id: item.id, name_zh: item.name_zh, sort_order: item.sort_order }]);
-      await setSession(from, { selectedSymptoms: newSel, selectedSymptom: newSel[0] || null });
-      const newSet = new Set(newSel.map(x => x.id));
-      return {
-        text: `☑️ 已選：${item.name_zh}\n\n📋 請繼續選擇（${cur}/${pages}）：\n\n` +
-              `${fmtList(list, newSet, hasPrev, hasNext)}\n\n` +
-              `👉 可多選；選「✅ 完成」送出。`,
+        text: `📋 請選擇症狀（${prevSlice.page}/${prevSlice.pages}）：\n\n` +
+              `${fmtList(prevSlice.list, selectedIds, prevSlice.page > 1, prevSlice.page < prevSlice.pages)}\n\n` +
+              `👉 可多選：輸入 1..${prevSlice.list.length}，或「1,3,5」批次勾選；選「✅ 完成」送出。`,
         done: false
       };
     }
+
+    if (idxNext && n === idxNext) {
+      const next = cur + 1;
+      await setSession(from, { symptomSelectorPage: next });
+      const nextSlice = pageSlice(all, next);
+      return {
+        text: `📋 請選擇症狀（${nextSlice.page}/${nextSlice.pages}）：\n\n` +
+              `${fmtList(nextSlice.list, selectedIds, nextSlice.page > 1, nextSlice.page < nextSlice.pages)}\n\n` +
+              `👉 可多選：輸入 1..${nextSlice.list.length}，或「1,3,5」批次勾選；選「✅ 完成」送出。`,
+        done: false
+      };
+    }
+
+    if (n === idxClear) {
+      await setSession(from, { selectedSymptoms: [], selectedSymptom: admin.firestore.FieldValue.delete() });
+      const freshSet = new Set();
+      return {
+        text: `🧹 已清除已選。\n\n📋 請繼續選擇（${cur}/${pages}）：\n\n` +
+              `${fmtList(list, freshSet, hasPrev, hasNext)}\n\n` +
+              `👉 可多選：輸入 1..${list.length}，或「1,3,5」批次勾選；選「✅ 完成」送出。`,
+        done: false
+      };
+    }
+
+    if (n === idxDone) {
+      if (selected.length === 0) {
+        return { text: '⚠️ 請先至少勾選一項，再選「✅ 完成」。', done: false };
+      }
+      const unique = uniqById(selected);
+      await setSession(from, {
+        selectedSymptoms: unique,
+        selectedSymptom: unique[0] || null,
+        symptomSelectorPage: 1
+      });
+      const names = unique.map(x => x.name_zh || x.id).join('、');
+      return { text: `✅ 你選擇的症狀：${names}`, done: true, selectedSymptom: unique[0] || null };
+    }
   }
 
-  // 非數字或超範圍 → 顯示當頁
+  // ── 批次勾選/取消（nums 長度 >= 1）：處理 1..list.length 範圍內的數字
+  const toggleIdx = nums.filter(n => n >= 1 && n <= list.length);
+  if (toggleIdx.length > 0) {
+    // 用 Set 加速判斷
+    const selSet = new Set(selected.map(x => x.id));
+    let newSel = selected.slice();
+
+    for (const n of toggleIdx) {
+      const item = list[n - 1];
+      if (!item) continue;
+      if (selSet.has(item.id)) {
+        // 取消
+        newSel = newSel.filter(x => x.id !== item.id);
+        selSet.delete(item.id);
+      } else {
+        // 勾選
+        newSel.push({ id: item.id, name_zh: item.name_zh, sort_order: item.sort_order });
+        selSet.add(item.id);
+      }
+    }
+    newSel = uniqById(newSel);
+    await setSession(from, { selectedSymptoms: newSel, selectedSymptom: newSel[0] || null });
+
+    const newSet = new Set(newSel.map(x => x.id));
+    return {
+      text: `☑️ 已更新選擇（本頁）：${toggleIdx.join('、')}\n\n` +
+            `📋 請繼續選擇（${cur}/${pages}）：\n\n` +
+            `${fmtList(list, newSet, hasPrev, hasNext)}\n\n` +
+            `👉 可多選：輸入 1..${list.length}，或「1,3,5」批次勾選；選「✅ 完成」送出。`,
+      done: false
+    };
+  }
+
+  // 非數字或完全無效 → 顯示當頁
   await setSession(from, { symptomSelectorPage: cur });
   return {
     text: `📋 請選擇症狀（${cur}/${pages}）：\n\n` +
           `${fmtList(list, selectedIds, hasPrev, hasNext)}\n\n` +
-          `👉 請輸入數字：1..${list.length} 勾選/取消；或選「✅ 完成」送出。`,
+          `👉 可多選：輸入 1..${list.length}，或「1,3,5」批次勾選；選「✅ 完成」送出。`,
     done: false
   };
 }
