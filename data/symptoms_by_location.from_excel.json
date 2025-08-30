@@ -1,0 +1,1267 @@
+[
+  {
+    "location_id": "head_neck",
+    "location_name_zh": "🧠 頭部與頸部",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      },
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 3
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 4
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 5
+      },
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 6
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 7
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 8
+      }
+    ]
+  },
+  {
+    "location_id": "chest",
+    "location_name_zh": "🫁 胸部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen",
+    "location_name_zh": "🍔 腹部",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "back",
+    "location_name_zh": "🔙背部",
+    "symptoms": [
+      {
+        "id": "back_pain",
+        "name_zh": "背痛",
+        "sort_order": 1
+      },
+      {
+        "id": "radicular_pain",
+        "name_zh": "放射痛",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "upper_limb",
+    "location_name_zh": "💪 上肢（肩膀、手臂、手）",
+    "symptoms": []
+  },
+  {
+    "location_id": "lower_limb",
+    "location_name_zh": "🦵 下肢（臀部、大腿等）",
+    "symptoms": [
+      {
+        "id": "leg_swelling",
+        "name_zh": "下肢腫脹",
+        "sort_order": 1
+      }
+    ]
+  },
+  {
+    "location_id": "whole_body",
+    "location_name_zh": "🦴 全身／全身性不適",
+    "symptoms": [
+      {
+        "id": "fever",
+        "name_zh": "發燒",
+        "sort_order": 1
+      },
+      {
+        "id": "fatigue",
+        "name_zh": "疲倦",
+        "sort_order": 2
+      },
+      {
+        "id": "weight_loss",
+        "name_zh": "體重下降",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "other",
+    "location_name_zh": "❓其他",
+    "symptoms": []
+  },
+  {
+    "location_id": "head_top",
+    "location_name_zh": "🧠 頭部（顱頂區）",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "eye",
+    "location_name_zh": "👁️ 眼睛",
+    "symptoms": [
+      {
+        "id": "eye_pain",
+        "name_zh": "眼痛",
+        "sort_order": 1
+      },
+      {
+        "id": "eye_redness",
+        "name_zh": "眼紅",
+        "sort_order": 2
+      },
+      {
+        "id": "blurred_vision",
+        "name_zh": "視力模糊",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "ear",
+    "location_name_zh": "👂 耳朵",
+    "symptoms": [
+      {
+        "id": "otalgia_ear_pain",
+        "name_zh": "耳痛",
+        "sort_order": 1
+      },
+      {
+        "id": "hearing_loss",
+        "name_zh": "聽力下降",
+        "sort_order": 2
+      },
+      {
+        "id": "tinnitus",
+        "name_zh": "耳鳴",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "mouth",
+    "location_name_zh": "👄 口腔與牙齒",
+    "symptoms": [
+      {
+        "id": "oral_ulcers",
+        "name_zh": "口腔潰瘍",
+        "sort_order": 1
+      },
+      {
+        "id": "halitosis",
+        "name_zh": "口臭",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "nose",
+    "location_name_zh": "👃 鼻子",
+    "symptoms": [
+      {
+        "id": "nasal_congestion",
+        "name_zh": "鼻塞",
+        "sort_order": 1
+      }
+    ]
+  },
+  {
+    "location_id": "throat",
+    "location_name_zh": "🗣️ 喉嚨",
+    "symptoms": [
+      {
+        "id": "sore_throat",
+        "name_zh": "喉嚨痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dysphagia",
+        "name_zh": "吞嚥困難",
+        "sort_order": 2
+      },
+      {
+        "id": "hoarseness",
+        "name_zh": "聲音沙啞",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "neck",
+    "location_name_zh": "🦴 頸部",
+    "symptoms": []
+  },
+  {
+    "location_id": "face",
+    "location_name_zh": "🙂 臉頰與下巴",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "hair",
+    "location_name_zh": "💇‍♂️ 頭髮與頭皮",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "chest_center",
+    "location_name_zh": "🎯 胸部正中央",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_left_medial",
+    "location_name_zh": "↙️ 中央偏左",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left",
+    "location_name_zh": "🫁 左胸",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_left_lateral",
+    "location_name_zh": "👈 左側胸部（腋下下方）",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_right_medial",
+    "location_name_zh": "↘️ 中央偏右",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right",
+    "location_name_zh": "🫁 右胸",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_right_lateral",
+    "location_name_zh": "👉 右側胸部（腋下下方）",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_whole",
+    "location_name_zh": "📦 整個胸腔",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_breast",
+    "location_name_zh": "📦 乳房(（請同時選擇左或右胸）",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_center_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_center_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_center_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_center_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_center_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_center_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_left_medial_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_medial_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_medial_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_medial_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_medial_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_medial_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_left_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_left_lateral_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_lateral_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_lateral_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_lateral_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_lateral_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_left_lateral_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_right_medial_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_medial_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_medial_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_medial_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_medial_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_medial_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_right_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_right_lateral_upper",
+    "location_name_zh": "上部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_lateral_middle",
+    "location_name_zh": "中部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_lateral_lower",
+    "location_name_zh": "下部",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_lateral_skin",
+    "location_name_zh": "皮膚層",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_lateral_superficial",
+    "location_name_zh": "表層組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_right_lateral_internal",
+    "location_name_zh": "胸腔內部",
+    "symptoms": [
+      {
+        "id": "chest_pain",
+        "name_zh": "胸痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dyspnea_shortness_of_breath",
+        "name_zh": "呼吸急促",
+        "sort_order": 2
+      },
+      {
+        "id": "cough",
+        "name_zh": "咳嗽",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "chest_breast_all",
+    "location_name_zh": "🎀 整個乳房",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_breast_upper_left",
+    "location_name_zh": "↖️ 左上區",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_breast_lower_left",
+    "location_name_zh": "↙️ 左下區",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_breast_upper_right",
+    "location_name_zh": "↗️ 右上區",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_breast_lower_right",
+    "location_name_zh": "↘️ 右下區",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_breast_center",
+    "location_name_zh": "🎯 中央區",
+    "symptoms": []
+  },
+  {
+    "location_id": "chest_breast_nipple",
+    "location_name_zh": "📍 乳頭",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "chest_breast_skin",
+    "location_name_zh": "👕 皮膚表面",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "chest_breast_internal",
+    "location_name_zh": "🫀 內部組織",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper",
+    "location_name_zh": "上腹",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_middle",
+    "location_name_zh": "中腹",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_lower",
+    "location_name_zh": "下腹",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_genital",
+    "location_name_zh": "陰部",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper_center",
+    "location_name_zh": "中間（上腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper_left_center",
+    "location_name_zh": "中間偏左（上腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper_left",
+    "location_name_zh": "左腹（上腹）",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_upper_left_side",
+    "location_name_zh": "左側（上腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper_right_center",
+    "location_name_zh": "中間偏右（上腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper_right",
+    "location_name_zh": "右腹（上腹）",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_upper_right_side",
+    "location_name_zh": "右側（上腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_upper_skin",
+    "location_name_zh": "皮膚表面（上腹）",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_upper_internal",
+    "location_name_zh": "深層內部（上腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_middle_center",
+    "location_name_zh": "中間（中腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_middle_left_center",
+    "location_name_zh": "中間偏左（中腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_middle_left",
+    "location_name_zh": "左腹（中腹）",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_middle_left_side",
+    "location_name_zh": "左側（中腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_middle_right_center",
+    "location_name_zh": "中間偏右（中腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_middle_right",
+    "location_name_zh": "右腹（中腹）",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_middle_right_side",
+    "location_name_zh": "右側（中腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_middle_skin",
+    "location_name_zh": "皮膚表面（中腹）",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_middle_internal",
+    "location_name_zh": "深層內部（中腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_lower_center",
+    "location_name_zh": "中間（下腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_lower_left_center",
+    "location_name_zh": "中間偏左（下腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_lower_left",
+    "location_name_zh": "左腹（下腹）",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_lower_left_side",
+    "location_name_zh": "左側（下腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_lower_right_center",
+    "location_name_zh": "中間偏右（下腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_lower_right",
+    "location_name_zh": "右腹（下腹）",
+    "symptoms": [
+      {
+        "id": "nausea",
+        "name_zh": "噁心",
+        "sort_order": 1
+      },
+      {
+        "id": "vomiting",
+        "name_zh": "嘔吐",
+        "sort_order": 2
+      },
+      {
+        "id": "diarrhea",
+        "name_zh": "腹瀉",
+        "sort_order": 3
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_lower_right_side",
+    "location_name_zh": "右側（下腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "abdomen_lower_skin",
+    "location_name_zh": "皮膚表面（下腹）",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "abdomen_lower_internal",
+    "location_name_zh": "深層內部（下腹）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_mons_pubis",
+    "location_name_zh": "陰阜（恥骨上方凸起／毛那裡）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_labia_majora",
+    "location_name_zh": "大陰唇（外面兩塊肉／外皮）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_labia_minora",
+    "location_name_zh": "小陰唇（內邊皮／夾住的地方）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_clitoris",
+    "location_name_zh": "陰蒂周圍（最前面粒粒／敏感位置）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_urethra",
+    "location_name_zh": "尿道口（小便孔／小洞）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_vaginal_opening",
+    "location_name_zh": "陰道口（中間開口／進去那裡）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_perineum",
+    "location_name_zh": "會陰（肛門與陰道中間）",
+    "symptoms": []
+  },
+  {
+    "location_id": "genital_skin_surface",
+    "location_name_zh": "皮膚表面（紅癢／整片皮膚）",
+    "symptoms": [
+      {
+        "id": "headache",
+        "name_zh": "頭痛",
+        "sort_order": 1
+      },
+      {
+        "id": "dizziness",
+        "name_zh": "頭暈",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "genital_whole_uncertain",
+    "location_name_zh": "整個陰部（全部都唔舒服）",
+    "symptoms": []
+  },
+  {
+    "location_id": "back_upper",
+    "location_name_zh": "上背（胸部背面）",
+    "symptoms": [
+      {
+        "id": "back_pain",
+        "name_zh": "背痛",
+        "sort_order": 1
+      },
+      {
+        "id": "radicular_pain",
+        "name_zh": "放射痛",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "back_middle",
+    "location_name_zh": "中背（腹部背面）",
+    "symptoms": [
+      {
+        "id": "back_pain",
+        "name_zh": "背痛",
+        "sort_order": 1
+      },
+      {
+        "id": "radicular_pain",
+        "name_zh": "放射痛",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "back_lower",
+    "location_name_zh": "下背（腰臀部）",
+    "symptoms": [
+      {
+        "id": "back_pain",
+        "name_zh": "背痛",
+        "sort_order": 1
+      },
+      {
+        "id": "radicular_pain",
+        "name_zh": "放射痛",
+        "sort_order": 2
+      }
+    ]
+  },
+  {
+    "location_id": "back_spine",
+    "location_name_zh": "脊椎骨",
+    "symptoms": []
+  },
+  {
+    "location_id": "back_anus",
+    "location_name_zh": "肛門",
+    "symptoms": []
+  }
+]
